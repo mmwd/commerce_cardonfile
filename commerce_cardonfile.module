@@ -235,7 +235,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
         // enabled (via the cardonfile boolean in its info array).
         $payment_method = commerce_payment_method_instance_load($form['commerce_payment']['payment_method']['#default_value']);
 
-        if (!empty($payment_method['cardonfile']) && !empty($form['commerce_payment']['payment_details']['credit_card'])) {
+        if (!empty($form_state['account']->uid) && !empty($payment_method['cardonfile']) && !empty($form['commerce_payment']['payment_details']['credit_card'])) {
           // Add a checkbox to the credit card details container to store the
           // credit card for future use.
           $storage = variable_get('commerce_cardonfile_storage', 'opt-in');
