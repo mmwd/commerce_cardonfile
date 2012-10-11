@@ -9,3 +9,10 @@ core = 7.x
 
 ; Simple tests
 ; files[] = tests/commerce_cardonfile.test
+
+; Views handlers
+files[] = includes/views/handlers/commerce_cardonfile_handler_field_data_operations.inc
+files[] = includes/views/handlers/commerce_cardonfile_handler_field_card_type.inc
+files[] = includes/views/handlers/commerce_cardonfile_handler_field_card_status.inc
+files[] = includes/views/handlers/commerce_cardonfile_plugin_argument_validate_card_id.inc
+files[] = includes/views/handlers/commerce_cardonfile_plugin_argument_validate_owner.inc

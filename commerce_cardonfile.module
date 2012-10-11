@@ -22,18 +22,6 @@ function commerce_cardonfile_menu() {
     'file' => 'includes/commerce_cardonfile.admin.inc',
   );
 
-  $items['user/%user/stored-payment-methods'] = array(
-    'title' => 'Stored payment methods',
-    'description' => 'Edit or delete your stored payment methods.',
-    'page callback' => 'commerce_cardonfile_overview',
-    'page arguments' => array(1),
-    'access callback' => 'commerce_cardonfile_user_access',
-    'access arguments' => array(1),
-    'type' => MENU_LOCAL_TASK,
-    'weight' => 20,
-    'file' => 'includes/commerce_cardonfile.pages.inc',
-  );
-
   $items['user/%user/stored-payment-methods/%commerce_cardonfile_data'] = array(
     'title' => 'Credit card',
     'page callback' => 'commerce_cardonfile_redirect_to_user',
@@ -161,6 +149,16 @@ function commerce_cardonfile_hook_info() {
   );
 
   return $hooks;
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function commerce_cardonfile_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'commerce_cardonfile') . '/includes/views',
+  );
 }
 
 /**
