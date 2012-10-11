@@ -147,6 +147,23 @@ function commerce_cardonfile_permission() {
 }
 
 /**
+ * Implements hook_hook_info().
+ */
+function commerce_cardonfile_hook_info() {
+  $base_info = array(
+    'group' => 'commerce',
+  );
+
+  $hooks = array(
+    'commerce_cardonfile_data_insert' => $base_info,
+    'commerce_cardonfile_data_update' => $base_info,
+    'commerce_cardonfile_data_delete' => $base_info,
+  );
+
+  return $hooks;
+}
+
+/**
  * Implements hook_theme().
  */
 function commerce_cardonfile_theme() {
@@ -418,18 +435,35 @@ function commerce_cardonfile_data_load_multiple($uid, $instance_id = NULL, $acti
  *   card_id used to represent the card data locally after an insert.
  */
 function commerce_cardonfile_data_save(&$card_data) {
-  if (!empty($card_data['card_id']) && commerce_cardonfile_data_load($card_data['card_id'])) {
+  $return = FALSE;
+  $card_data_original = NULL;
+
+  if (!empty($card_data['card_id'])) {
+    $card_data_original = commerce_cardonfile_data_load($card_data['card_id']);
+  }
+
+  if (isset($card_data_original)) {
+    // Update
     $card_data['changed'] = REQUEST_TIME;
 
-    return drupal_write_record('commerce_card_data', $card_data, 'card_id');
+    $return = drupal_write_record('commerce_card_data', $card_data, 'card_id');
+
+    // Notify other modules that this card data has been updated.
+    module_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
   }
   else {
+    // Insert
     $card_data['card_id'] = NULL;
     $card_data['created'] = REQUEST_TIME;
     $card_data['changed'] = REQUEST_TIME;
 
-    return drupal_write_record('commerce_card_data', $card_data);
+    $return = drupal_write_record('commerce_card_data', $card_data);
+
+    // Notify other modules that this card data has been inserted.
+    module_invoke_all('commerce_cardonfile_data_insert', $card_data);
   }
+
+  return $return;
 }
 
 /**
@@ -439,7 +473,14 @@ function commerce_cardonfile_data_save(&$card_data) {
  *   The local ID of the card data to delete.
  */
 function commerce_cardonfile_data_delete($card_id) {
-  db_delete('commerce_card_data')
-    ->condition($type, $id)
-    ->execute();
+  $card_data = commerce_cardonfile_data_load($card_id);
+
+  if (!empty($card_data)) {
+    db_delete('commerce_card_data')
+      ->condition('card_id', $card_id)
+      ->execute();
+
+    // Notify other modules that this card data has been deleted.
+    module_invoke_all('commerce_cardonfile_data_delete', $card_data);
+  }
 }
