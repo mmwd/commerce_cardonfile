@@ -474,11 +474,11 @@ function commerce_cardonfile_data_delete($card_id) {
   $card_data = commerce_cardonfile_data_load($card_id);
 
   if (!empty($card_data)) {
+    // Notify other modules that this card data has been deleted.
+    module_invoke_all('commerce_cardonfile_data_delete', $card_data);
+
     db_delete('commerce_card_data')
       ->condition('card_id', $card_id)
       ->execute();
-
-    // Notify other modules that this card data has been deleted.
-    module_invoke_all('commerce_cardonfile_data_delete', $card_data);
   }
 }
