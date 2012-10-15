@@ -250,7 +250,7 @@ function commerce_cardonfile_views_data() {
       'click sortable' => TRUE,
     ),
     'filter' => array(
-      'handler' => 'views_handler_filter_numeric',
+      'handler' => 'commerce_cardonfile_handler_filter_card_status',
     ),
     'sort' => array(
       'handler' => 'views_handler_sort',

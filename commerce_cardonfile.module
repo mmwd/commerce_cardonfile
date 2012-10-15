@@ -34,7 +34,7 @@ function commerce_cardonfile_menu() {
     'title' => 'Update',
     'description' => 'Update a stored payment method.',
     'page callback' => 'commerce_cardonfile_update',
-    'page arguments' => array(3),
+    'page arguments' => array(3, 1),
     'access callback' => 'commerce_cardonfile_data_access',
     'access arguments' => array(3),
     'type' => MENU_LOCAL_TASK,
@@ -158,6 +158,17 @@ function commerce_cardonfile_views_api() {
   return array(
     'api' => 3,
     'path' => drupal_get_path('module', 'commerce_cardonfile') . '/includes/views',
+  );
+}
+
+/**
+ * Implements hook_forms()
+ */
+function commerce_cardonfile_forms() {
+  return array(
+    'commerce_cardonfile_edit_customer_profile_form' => array(
+      'callback' => 'commerce_customer_customer_profile_form',
+    ),
   );
 }
 
@@ -351,6 +362,56 @@ function commerce_cardonfile_options_list($stored_cards, $element = 'radios', $d
   }
 
   return $options;
+}
+
+/**
+ * Returns the human readable title of any or all data statuses.
+ *
+ * @param $name
+ *   Optional parameter specifying the name of the status whose title
+ *     to return.
+ *
+ * @return
+ *   Either an array of all status titles keyed by the status_id or a
+ *     string containing the human readable title for the specified status. If a
+ *     status is specified that does not exist, this function returns FALSE.
+ */
+function commerce_cardonfile_data_status_get_title($name = NULL) {
+  $statuses = commerce_cardonfile_data_statuses();
+
+  // Return a status title if specified and it exists.
+  if (!empty($name)) {
+    if (isset($statuses[$name])) {
+      return $statuses[$name];
+    }
+    else {
+      // Return FALSE if it does not exist.
+      return FALSE;
+    }
+  }
+
+  // Otherwise return all titles.
+  return $statuses;
+}
+
+/**
+ * Wraps commerce_cardonfile_status_get_title().
+ */
+function commerce_cardonfile_data_status_options_list() {
+  return commerce_cardonfile_data_status_get_title();
+}
+
+/**
+ * Returns a list of cof data statuses
+ */
+function commerce_cardonfile_data_statuses() {
+  $statuses = array(
+    0 => t('Inactive'),
+    1 => t('Active'),
+    2 => t('Not deletable'),
+  );
+
+  return $statuses;
 }
 
 /**

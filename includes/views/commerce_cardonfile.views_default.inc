@@ -117,6 +117,14 @@ function commerce_cardonfile_views_default_views() {
   $handler->display->display_options['arguments']['uid']['specify_validation'] = TRUE;
   $handler->display->display_options['arguments']['uid']['validate']['type'] = 'commerce_cof_owner';
   $handler->display->display_options['arguments']['uid']['validate']['fail'] = 'access denied';
+  /* Filter criterion: Commerce Card on File: Card data status */
+  $handler->display->display_options['filters']['status']['id'] = 'status';
+  $handler->display->display_options['filters']['status']['table'] = 'commerce_card_data';
+  $handler->display->display_options['filters']['status']['field'] = 'status';
+  $handler->display->display_options['filters']['status']['operator'] = 'not in';
+  $handler->display->display_options['filters']['status']['value'] = array(
+    0 => '0',
+  );
 
   /* Display: Page */
   $handler = $view->new_display('page', 'Page', 'page');

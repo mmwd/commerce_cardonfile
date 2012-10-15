@@ -5,12 +5,7 @@
  */
 class commerce_cardonfile_handler_field_card_status extends views_handler_field {
   function render($values) {
-    $statuses = array(
-      0 => t('inactive'),
-      1 => t('Active'),
-      2 => t('Not deletable'),
-    );
-
+    $statuses = commerce_cardonfile_data_statuses();
     $value = $this->get_value($values);
     if (!empty($statuses[$value])) {
       return $this->sanitize_value($statuses[$value]);
