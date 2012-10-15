@@ -162,17 +162,6 @@ function commerce_cardonfile_views_api() {
 }
 
 /**
- * Implements hook_forms()
- */
-function commerce_cardonfile_forms() {
-  return array(
-    'commerce_cardonfile_edit_customer_profile_form' => array(
-      'callback' => 'commerce_customer_customer_profile_form',
-    ),
-  );
-}
-
-/**
  * Implements hook_theme().
  */
 function commerce_cardonfile_theme() {

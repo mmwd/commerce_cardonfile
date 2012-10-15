@@ -27,7 +27,7 @@ function commerce_cardonfile_update($card_data, $owner) {
  */
 function commerce_cardonfile_update_form($form, &$form_state, $card_data = array(), $owner = NULL) {
   global $user;
-dpm($card_data, '$card_data');
+
   $card_data = !empty($card_data) ? $card_data : array();
   $form['card_data'] = array(
     '#type' => 'value',
@@ -39,28 +39,6 @@ dpm($card_data, '$card_data');
     '#type' => 'value',
     '#value' => $owner,
   );
-
-  // Address form
-  //module_load_include('inc', 'commerce_customer', 'includes/commerce_customer_profile.forms');
-  //$profile = commerce_customer_profile_new('billing');
-  //$form['billing_address'] = drupal_get_form('commerce_cardonfile_edit_customer_profile_form', $profile, $owner, $card_data);
-  $address_values = addressfield_default_values();
-  $address_format_handlers = array_keys(addressfield_format_plugins_options());
-  $address_context = array(
-    'mode' => 'form',
-  );
-dpm($address_values, '$address_values');
-dpm($address_format_handlers, '$address_format_handlers');
-dpm(addressfield_generate($address_values, $address_format_handlers, $address_context), 'hello');
-  //$form['billing_address'] = addressfield_generate($address_values, $address_format_handlers, $address_context);
-
-  $format = array();
-  foreach ($address_format_handlers as $handler) {
-    if ($callback = ctools_plugin_load_function('addressfield', 'format', $handler, 'format callback')) {
-      $callback($format, $address_values, $address_context);
-    }
-  }
-dpm($format, '$callback');
 
   // Credit Card form
   // Load the credit card helper functions from the Payment module.
