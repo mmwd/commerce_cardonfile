@@ -28,6 +28,12 @@ function commerce_cardonfile_update($card_data, $owner) {
 function commerce_cardonfile_update_form($form, &$form_state, $card_data = array(), $owner = NULL) {
   global $user;
 
+  // initialize parents
+  if (!isset($form['#parents'])){
+    $form['#parents'] = array();
+  }
+
+  // store card data
   $card_data = !empty($card_data) ? $card_data : array();
   $form['card_data'] = array(
     '#type' => 'value',
@@ -40,20 +46,54 @@ function commerce_cardonfile_update_form($form, &$form_state, $card_data = array
     '#value' => $owner,
   );
 
+  // retrieve update_callback name
+  $payment_method = array();
+  $update_callback = NULL;
+  $get_address_callback = NULL;
+  if (!empty($card_data['instance_id'])) {
+    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+    $update_callback = commerce_cardonfile_payment_method_callback($payment_method, 'update callback');
+    $get_address_callback = commerce_cardonfile_payment_method_callback($payment_method, 'get address callback');
+  }
+
   // Credit Card form
   // Load the credit card helper functions from the Payment module.
   module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
 
-  $defaults = array(
+  $card_default_values = array(
     'owner' => isset($card_data['card_name']) ? $card_data['card_name'] : '',
     'number' => t('(Last 4): @number', array('@number' => $card_data['card_number'])),
     'exp_month' => $card_data['card_exp_month'],
     'exp_year' => $card_data['card_exp_year'],
   );
 
-  $form += commerce_payment_credit_card_form(array('owner' => TRUE), $defaults);
+  $form += commerce_payment_credit_card_form(array('owner' => TRUE), $card_default_values);
   $form['credit_card']['number']['#description'] = t('Leaving this field alone will leave the current card number unchanged.');
 
+  // Address form
+  $address_default_values = array();
+
+  // get address from payment method
+  if (!empty($card_data)) {
+    $address_callback_return = $get_address_callback($payment_method, $card_data);
+    if (!empty($address_callback_return)) {
+      $address_default_values = $address_callback_return;
+    }
+  }
+
+  // Get addressfield form
+  $address_field_form = commerce_cardonfile_billing_address_form($form, $form_state, $address_default_values);
+
+  // add to form in a separate container
+  if (!empty($address_field_form)) {
+    $form['card_billing_address'] = array(
+      '#type' => 'container',
+      '0' => $address_field_form,
+    );
+  }
+
+  // disable entire form if no update callback
+  $form['#disabled'] = empty($update_callback);
 
   $form['submit'] = array(
     '#type' => 'submit',
@@ -68,6 +108,9 @@ function commerce_cardonfile_update_form($form, &$form_state, $card_data = array
  * Form validate handler: update stored card data.
  */
 function commerce_cardonfile_update_form_validate($form, &$form_state) {
+  // Load the credit card helper functions from the Payment module.
+  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+
   // Ensure non-default values are valid numbers.
   if ($form_state['values']['credit_card']['number'] != $form['credit_card']['number']['#default_value']) {
     if (!commerce_payment_validate_credit_card_number($form_state['values']['credit_card']['number'])) {
@@ -100,11 +143,11 @@ function commerce_cardonfile_update_form_submit($form, &$form_state) {
   $card_data['card_exp_year'] = $form_state['values']['credit_card']['exp_year'];
 
   // Invoke the payment method's card update callback.
-  $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
-  $callback = $payment_method['cardonfile']['update callback'];
-
-  if (function_exists($callback)) {
-    if (!$callback($form, $form_state, $payment_method, $card_data)) {
+  if (!empty($card_data['instance_id'])) {
+    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+    $update_callback = commerce_cardonfile_payment_method_callback($payment_method, 'update callback');
+    $callback_return = $update_callback($form, $form_state, $payment_method, $card_data);
+    if (!$callback_return) {
       // Display a message if we failed to communicate properly with the payment
       // gateway in the Card on File update callback.
       drupal_set_message(t('We encountered an error attempting to update your card data. Please try again and contact us if this error persists.'), 'error');
@@ -156,11 +199,11 @@ function commerce_cardonfile_delete_form_submit($form, &$form_state) {
   $card_data = $form_state['values']['card_data'];
 
   // Invoke the payment method's card delete callback.
-  $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
-  $callback = $payment_method['cardonfile']['delete callback'];
-
-  if (function_exists($callback)) {
-    if (!$callback($form, $form_state, $payment_method, $card_data)) {
+  if (!empty($card_data['instance_id'])) {
+    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+    $delete_callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
+    $callback_return = $delete_callback($form, $form_state, $payment_method, $card_data);
+    if (!$callback_return) {
       // Display a message if we failed to communicate properly with the payment
       // gateway in the Card on File delete callback.
       drupal_set_message(t('We encountered an error attempting to delete your card data. Please try again and contact us if this error persists.'), 'error');

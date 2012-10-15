@@ -36,7 +36,7 @@ function commerce_cardonfile_menu() {
     'page callback' => 'commerce_cardonfile_update',
     'page arguments' => array(3, 1),
     'access callback' => 'commerce_cardonfile_data_access',
-    'access arguments' => array(3),
+    'access arguments' => array(3, 'update'),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
     'file' => 'includes/commerce_cardonfile.pages.inc',
@@ -48,7 +48,7 @@ function commerce_cardonfile_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('commerce_cardonfile_delete_form', 3),
     'access callback' => 'commerce_cardonfile_data_access',
-    'access arguments' => array(3),
+    'access arguments' => array(3, 'delete'),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
     'weight' => 10,
@@ -88,9 +88,45 @@ function commerce_cardonfile_user_access($account) {
 /**
  * Determines if the current user has access to perform an operation on the
  * given card data array.
+ *
+ * @param $card_data
+ *   The card data array
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create' or
+ *   'delete'.
+ *
+ * @return
+ *   TRUE if the current user has access
  */
-function commerce_cardonfile_data_access($card_data) {
+function commerce_cardonfile_data_access($card_data, $op = 'view') {
   global $user;
+
+  // DENY if callback does NOT exist for specific operations
+  if (!empty($card_data['instance_id'])) {
+    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+
+
+    $op = !empty($op) ? $op : 'view';
+    $callback = TRUE;
+    switch ($op) {
+      case 'create':
+        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
+        break;
+
+      case 'delete':
+        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
+        break;
+
+      default:
+        $callback = TRUE;
+        break;
+    }
+
+    // DENY
+    if (empty($callback)) {
+      return FALSE;
+    }
+  }
 
   // Grant access for any user with administer permission.
   if (user_access('administer card data')) {
@@ -404,6 +440,31 @@ function commerce_cardonfile_data_statuses() {
 }
 
 /**
+ * Returns the specified Card on File callback for the given payment method if it exists.
+ *
+ * @param $payment_method
+ *   The payment method object.
+ * @param $callback
+ *   The callback function to return, one of:
+ *    - 'update callback'
+ *    - 'delete callback'
+ *    - 'charge callback'
+ *    - 'get address callback'
+ *
+ * @return
+ *   A string containing the name of the callback function or FALSE if it could
+ *     not be found.
+ */
+function commerce_cardonfile_payment_method_callback($payment_method, $callback) {
+  if (!empty($payment_method) && !empty($payment_method['cardonfile'][$callback])) {
+    $func = $payment_method['cardonfile'][$callback];
+    if (function_exists($func)) {
+      return $func;
+    }
+  }
+}
+
+/**
  * Loads stored card data by ID.
  *
  * @param $card_id
@@ -531,4 +592,51 @@ function commerce_cardonfile_data_delete($card_id) {
       ->condition('card_id', $card_id)
       ->execute();
   }
+}
+
+// -----------------------------------------------------------------------
+// Billing address handling
+
+/**
+ * Create a billing addressfield form outside of customer profile
+ *
+ * @param $form
+ *   The form the address field will be attached to
+ * @param $form_state
+ *   The form state for the form
+ * @$default_values
+ *   An array of default values with addressfield parameter keys
+ *
+ * @return
+ *  The form element array created for this field.
+ *
+ * @see field_default_form()
+ */
+function commerce_cardonfile_billing_address_form(&$form, &$form_state, $default_values = array(), $include_name_lines = FALSE) {
+  $host_entity_type = 'commerce_customer_profile';
+  $host_bundle = 'billing';
+  $host_entity = NULL;
+  $field_name = 'commerce_customer_address';
+  $langcode = LANGUAGE_NONE;
+
+  $field = field_info_field($field_name);
+  $instance = field_info_instance($host_entity_type, $field_name, $host_bundle);
+
+  // hide name elements
+  if (empty($include_name_lines)) {
+    unset($instance['widget']['settings']['format_handlers']['name-full']);
+    unset($instance['widget']['settings']['format_handlers']['name-oneline']);
+  }
+
+  // Set default values
+  $values = array();
+  if (!empty($default_values) && is_array($default_values)) {
+    $values = $default_values;
+  }
+
+  // Create field items with addressfield defaults
+  $items = array($values + addressfield_default_values());
+
+  // Retrieve default form array
+  return field_default_form($host_entity_type, $host_entity, $field, $instance, $langcode, $items, $form, $form_state, 0);
 }
