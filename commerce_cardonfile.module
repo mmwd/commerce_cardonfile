@@ -440,6 +440,18 @@ function commerce_cardonfile_data_statuses() {
 }
 
 /**
+ * Returns an array of all available payment method cardonfile callbacks
+ */
+function commerce_cardonfile_payment_method_available_callbacks() {
+  return array(
+    'update callback',
+    'delete callback',
+    'charge callback',
+    'get address callback',
+  );
+}
+
+/**
  * Returns the specified Card on File callback for the given payment method if it exists.
  *
  * @param $payment_method
@@ -456,12 +468,50 @@ function commerce_cardonfile_data_statuses() {
  *     not be found.
  */
 function commerce_cardonfile_payment_method_callback($payment_method, $callback) {
-  if (!empty($payment_method) && !empty($payment_method['cardonfile'][$callback])) {
-    $func = $payment_method['cardonfile'][$callback];
-    if (function_exists($func)) {
-      return $func;
+  if (!empty($payment_method) && !empty($payment_method['method_id'])) {
+    $implements = commerce_cardonfile_payment_method_implements($callback);
+    if (!empty($implements) && !empty($implements[$payment_method['method_id']])) {
+      return $implements[$payment_method['method_id']];
     }
   }
+}
+
+/**
+ * Returns all payment method instances that implement a specific callback
+ *
+ * @param $callback
+ *   The callback function to return, one of:
+ *    - 'update callback'
+ *    - 'delete callback'
+ *    - 'charge callback'
+ *    - 'get address callback'
+ *
+ * @return
+ *  An array of callback function names keyed by payment method id
+ */
+function commerce_cardonfile_payment_method_implements($callback) {
+  $cache = &drupal_static(__FUNCTION__);
+
+  if (!isset($cache)) {
+    $cache = array();
+
+    // get payment methods and load module implements for hook_commerce_payment_method_info()
+    // so that cardonfile callback can be in same hook file, ie mymodule.commerce.inc
+    $payment_methods = commerce_payment_methods();
+    $available_callbacks = commerce_cardonfile_payment_method_available_callbacks();
+    foreach ($payment_methods as $method_id => $payment_method) {
+      foreach ($available_callbacks as $available_callback) {
+        if (!empty($payment_method['cardonfile'][$available_callback])) {
+          $func = $payment_method['cardonfile'][$available_callback];
+          if (function_exists($func)) {
+            $cache[$available_callback][$method_id] = $func;
+          }
+        }
+      }
+    }
+  }
+
+  return isset($cache[$callback]) ? $cache[$callback] : array();
 }
 
 /**
