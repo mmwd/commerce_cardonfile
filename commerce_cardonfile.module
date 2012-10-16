@@ -55,6 +55,29 @@ function commerce_cardonfile_menu() {
     'file' => 'includes/commerce_cardonfile.pages.inc',
   );
 
+  // create paths for each payment method
+  $create_implements = commerce_cardonfile_payment_method_implements('create callback');
+  foreach ($create_implements as $method_id => $method_function) {
+    $payment_method_instances = _commerce_cardonfile_payment_method_instances($method_id, FALSE);
+    if (empty($payment_method_instances)) {
+      continue;
+    }
+
+    foreach ($payment_method_instances as $instance_id => $payment_method) {
+      $items['user/%user/stored-payment-methods/add/' . drupal_hash_base64($instance_id)] = array(
+        'title' => 'Add a !name',
+        'title arguments' => array('!name' => $payment_method['display_title']),
+        'page callback' => 'commerce_cardonfile_create_page',
+        'page arguments' => array($instance_id, 1),
+        'access callback' => 'commerce_cardonfile_create_access',
+        'access arguments' => array($instance_id, 1),
+        'type' => MENU_LOCAL_ACTION,
+        'file' => 'includes/commerce_cardonfile.pages.inc',
+      );
+    }
+  }
+
+
   return $items;
 }
 
@@ -83,6 +106,30 @@ function commerce_cardonfile_user_access($account) {
   }
 
   return FALSE;
+}
+
+/**
+ * Determines if the current user has access to create a card for the account
+ *
+ * @param $method_id
+ *   The payment method id
+ * @param $account
+ *   The user account that will be the card owner
+ *
+ * @return
+ *   TRUE if the current user has access
+ */
+function commerce_cardonfile_create_access($instance_id, $account) {
+  $payment_method = commerce_payment_method_instance_load($instance_id);
+  $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
+
+  // DENY if no create callback
+  if (empty($create_callback)) {
+    return FALSE;
+  }
+
+/** @todo check admin access (create any for anyone), create any for own, create method_id for own ******/
+  return TRUE;
 }
 
 /**
@@ -521,6 +568,64 @@ function commerce_cardonfile_payment_method_implements($callback) {
 }
 
 /**
+ * Returns all payment method instances for a given payment method id
+ *
+ * @param $method_id
+ *   A payment method id
+ *
+ * @param $active_only
+ *   Only return active instances
+ *
+ * @return
+ *   An array of all loaded payment method instances
+ */
+function _commerce_cardonfile_payment_method_instances($method_id, $include_disabled = FALSE) {
+  $cached_ids = &drupal_static(__FUNCTION__, array());
+  $include_disabled = !empty($include_disabled);
+
+  if (!array_key_exists($method_id, $cached_ids)) {
+    $cached_ids[$method_id] = array();
+
+    // load all rules ... no easier way
+    $rules_configs = rules_config_load_multiple(FALSE);
+
+    // find all rules with an action to enable this method
+    foreach ($rules_configs as $rule_name => $rule) {
+      // fast skip if rule does not depend on commerce_payment
+      if (!isset($rule->dependencies) || !in_array('commerce_payment', $rule->dependencies)) {
+        continue;
+      }
+
+      foreach ($rule->actions() as $action) {
+        // skip any actions that are not simple rules actions, ie loops
+        if (!($action instanceof RulesAction)) {
+          continue;
+        }
+
+        if ($action->getElementName() == 'commerce_payment_enable_' . $method_id) {
+          $instance_id = commerce_payment_method_instance_id($method_id, $rule);
+          $cached_ids[$method_id][$instance_id] = $rule->active;
+          continue 2; // skip to next rule
+        }
+      }
+    }
+  }
+
+  // load instances
+  $instances = array();
+  if (!empty($cached_ids[$method_id])) {
+    foreach ($cached_ids[$method_id] as $instance_id => $instance_active) {
+      if ($instance_active || $include_disabled) {
+        $instances[$instance_id] = commerce_payment_method_instance_load($instance_id);
+      }
+    }
+  }
+
+  return $instances;
+}
+
+
+/**
  * Loads stored card data by ID.
  *
  * @param $card_id
@@ -693,6 +798,28 @@ function commerce_cardonfile_billing_address_form(&$form, &$form_state, $default
   // Create field items with addressfield defaults
   $items = array($values + addressfield_default_values());
 
+  // initialize parents for field_default_form
+  if (!isset($form['#parents'])){
+    $form['#parents'] = array();
+  }
+
   // Retrieve default form array
   return field_default_form($host_entity_type, $host_entity, $field, $instance, $langcode, $items, $form, $form_state, 0);
+}
+
+
+/**
+ * Wrapper to determine card type based on card number
+ */
+function _commerce_cardonfile_get_credit_card_type($number) {
+  // Determine the new credit card type if possible for use in later code.
+  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+
+  $card_type = '';
+  $valid_types = array_keys(commerce_payment_credit_card_types());
+  if (!empty($number)) {
+    $card_type = commerce_payment_validate_credit_card_type($number, $valid_types);
+  }
+
+  return $card_type;
 }
