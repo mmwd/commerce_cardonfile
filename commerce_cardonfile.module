@@ -33,7 +33,7 @@ function commerce_cardonfile_menu() {
   $items['user/%user/stored-payment-methods/%commerce_cardonfile_data/update'] = array(
     'title' => 'Update',
     'description' => 'Update a stored payment method.',
-    'page callback' => 'commerce_cardonfile_update',
+    'page callback' => 'commerce_cardonfile_update_page',
     'page arguments' => array(3, 1),
     'access callback' => 'commerce_cardonfile_data_access',
     'access arguments' => array(3, 'update'),
@@ -98,7 +98,7 @@ function commerce_cardonfile_user_access($account) {
  * @return
  *   TRUE if the current user has access
  */
-function commerce_cardonfile_data_access($card_data, $op = 'view') {
+function commerce_cardonfile_data_access($card_data = array(), $op = 'view') {
   global $user;
 
   // DENY if callback does NOT exist for specific operations
@@ -444,10 +444,12 @@ function commerce_cardonfile_data_statuses() {
  */
 function commerce_cardonfile_payment_method_available_callbacks() {
   return array(
+    'create callback',
     'update callback',
     'delete callback',
-    'charge callback',
+    'process callback',
     'get address callback',
+    'charge callback', // (implemented in commerce_recurring)
   );
 }
 
@@ -458,10 +460,12 @@ function commerce_cardonfile_payment_method_available_callbacks() {
  *   The payment method object.
  * @param $callback
  *   The callback function to return, one of:
+ *    - 'create callback',
  *    - 'update callback'
  *    - 'delete callback'
- *    - 'charge callback'
+ *    - 'process callback'
  *    - 'get address callback'
+ *    - 'charge callback' (implemented in commerce_recurring)
  *
  * @return
  *   A string containing the name of the callback function or FALSE if it could
@@ -481,10 +485,12 @@ function commerce_cardonfile_payment_method_callback($payment_method, $callback)
  *
  * @param $callback
  *   The callback function to return, one of:
+ *    - 'create callback',
  *    - 'update callback'
  *    - 'delete callback'
- *    - 'charge callback'
+ *    - 'process callback'
  *    - 'get address callback'
+ *    - 'charge callback' (implemented in commerce_recurring)
  *
  * @return
  *  An array of callback function names keyed by payment method id
