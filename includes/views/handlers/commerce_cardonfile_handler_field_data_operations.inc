@@ -40,7 +40,7 @@ class commerce_cardonfile_handler_field_data_operations extends views_handler_fi
     $root_contextual_link_path = 'user/' . $uid . '/stored-payment-methods';
 
     // Get the operations links.
-    $links = menu_contextual_links('commerce-cardonfile', $root_contextual_link_path, array($card_id));
+    $links = menu_contextual_links('commerce-cardonfile', $root_contextual_link_path, array($card_id, commerce_cardonfile_get_token()));
 
     if (!empty($links)) {
       // Add the destination to the links if specified.

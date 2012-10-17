@@ -100,6 +100,13 @@ function commerce_cardonfile_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'instance_default' => array(
+        'description' => 'Boolean indicating the default card for a payment instance ID.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
     ),
     'primary key' => array('card_id'),
     'indexes' => array(
@@ -116,3 +123,21 @@ function commerce_cardonfile_schema() {
 
   return $schema;
 }
+
+/**
+ * Add a default column to card data table
+ */
+function commerce_cardonfile_update_7101(&$sandbox) {
+  if (!db_field_exists('commerce_card_data', 'instance_default')) {
+    db_add_field('commerce_card_data', 'instance_default', array(
+      'description' => 'Boolean indicating the default card for a payment instance ID.',
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => TRUE,
+      'default' => 0,
+    ));
+  }
+
+  return t('Card data table has been updated.');
+}
+

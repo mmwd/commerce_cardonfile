@@ -39,6 +39,7 @@ function commerce_cardonfile_menu() {
     'access arguments' => array('edit', 3, 1),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
+    'weight' => 0,
     'file' => 'includes/commerce_cardonfile.pages.inc',
   );
 
@@ -51,8 +52,22 @@ function commerce_cardonfile_menu() {
     'access arguments' => array('delete', 3, 1),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
-    'weight' => 10,
+    'weight' => 5,
     'file' => 'includes/commerce_cardonfile.pages.inc',
+  );
+
+  $items['user/%user/stored-payment-methods/%commerce_cardonfile_data/%/toggle-default'] = array(
+    'title' => 'Set Default',
+    'title callback' => 'commerce_cardonfile_data_toggle_default_card_callback_title',
+    'title arguments' => array(3),
+    'description' => 'Toggle the default flag for a stored payment method.',
+    'page callback' => 'commerce_cardonfile_data_toggle_default_card_callback',
+    'page arguments' => array(3, 1, 4),
+    'access callback' => 'commerce_cardonfile_data_toggle_default_card_access',
+    'access arguments' => array(3, 1, 4),
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+    'weight' => 20,
   );
 
   // create paths for each payment method
@@ -704,6 +719,7 @@ function commerce_cardonfile_data_new($values = array()) {
     'card_exp_month' => '',
     'card_exp_year' => '',
     'status' => 1,
+    'instance_default' => 0,
   );
 
   return $data;
@@ -720,11 +736,8 @@ function commerce_cardonfile_data_new($values = array()) {
  *   data does not exist.
  */
 function commerce_cardonfile_data_load($card_id) {
-  return db_select('commerce_card_data', 'ccd')
-    ->fields('ccd')
-    ->condition('ccd.card_id', $card_id)
-    ->execute()
-    ->fetchAssoc();
+  $cards = commerce_cardonfile_data_load_multiple_by_id(array($card_id));
+  return !empty($cards) ? reset($cards) : FALSE;
 }
 
 /**
@@ -743,23 +756,73 @@ function commerce_cardonfile_data_load($card_id) {
  *   empty array if no matching data exists.
  */
 function commerce_cardonfile_data_load_multiple($uid, $instance_id = NULL, $active = TRUE) {
-  $query = db_select('commerce_card_data', 'ccd')
-    ->fields('ccd')
-    ->condition('ccd.uid', $uid);
+  $conditions = array('uid' => $uid);
 
   if (!empty($instance_id)) {
-    $query
-      ->condition('ccd.instance_id', $instance_id);
+    $conditions['instance_id'] = $instance_id;
   }
 
-  if ($active) {
-    $query
-      ->condition('ccd.status', 1);
+  if (!empty($active)) {
+    $conditions['status'] = 1;
   }
 
-  return $query
-    ->execute()
-    ->fetchAllAssoc('card_id', PDO::FETCH_ASSOC);
+  return commerce_cardonfile_data_load_multiple_by_id(array(), $conditions);
+}
+
+
+/**
+ * Loads multiple stored card data similar to entity_load().
+ *
+ * @see entity_load()
+ *
+ * @param $ids
+ *   An array of card IDs.
+ * @param $conditions
+ *   An array of conditions to filter by on the
+ *   {commerce_card_data} table in the form 'field' => $value.
+ *
+ * @return
+ *   An array of data arrays indexed by card_id.
+ */
+function commerce_cardonfile_data_load_multiple_by_id($ids = array(), $conditions = array()) {
+  $have_ids = !empty($ids) && is_array($ids);
+  $have_conditions = !empty($conditions);
+
+  // exit if nothing to query
+  if (!$have_ids && !$have_conditions) {
+    return array();
+  }
+
+  // initialize query ids to ids given
+  $query_ids = $have_ids ? $ids : array();
+
+  // initialize query
+  $records = array();
+  $query = db_select('commerce_card_data', 'ccd')->fields('ccd');
+
+  // add condition for ids
+  if (!empty($query_ids)) {
+    $query->condition('ccd.card_id', $query_ids, 'IN');
+  }
+
+  // Add given conditions
+  if ($have_conditions) {
+    $schema = drupal_get_schema('commerce_card_data');
+    foreach ($conditions as $field => $field_value) {
+      if (isset($schema['fields'][$field])) {
+        $query->condition('ccd.' . $field, $field_value);
+      }
+    }
+  }
+
+  // Order by card_id descending to show latest at the top
+  $query->orderBy('card_id', 'DESC');
+
+  // Execute query
+  $result = $query->execute();
+  $records = $result->fetchAllAssoc('card_id', PDO::FETCH_ASSOC);
+
+  return $records;
 }
 
 /**
@@ -807,8 +870,10 @@ function commerce_cardonfile_data_save(&$card_data) {
   if (isset($card_data_original)) {
     // Update
     $card_data['changed'] = REQUEST_TIME;
-
     $return = drupal_write_record('commerce_card_data', $card_data, 'card_id');
+
+    // Merge original to pass to hooks
+    $card_data += $card_data_original;
 
     // Notify other modules that this card data has been updated.
     module_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
@@ -824,6 +889,9 @@ function commerce_cardonfile_data_save(&$card_data) {
     // Notify other modules that this card data has been inserted.
     module_invoke_all('commerce_cardonfile_data_insert', $card_data);
   }
+
+  // ensure that there is only 1 default per instance
+  $num_cleared = commerce_cardonfile_data_ensure_single_instance_default($card_data);
 
   return $return;
 }
@@ -845,6 +913,123 @@ function commerce_cardonfile_data_delete($card_id) {
       ->condition('card_id', $card_id)
       ->execute();
   }
+}
+
+/**
+ * Toggle the card data's default flag
+ */
+function commerce_cardonfile_data_toggle_default_card($card_data) {
+  if (!empty($card_data['card_id'])) {
+    $update_data = array(
+      'card_id' => $card_data['card_id'],
+      'instance_default' => (int) !$card_data['instance_default'],
+    );
+    return commerce_cardonfile_data_save($update_data);
+  }
+
+  return FALSE;
+}
+
+/**
+ * Determines if the current user has access to toggle the default card
+ */
+function commerce_cardonfile_data_toggle_default_card_access($card_data, $owner, $token) {
+  // DENY of toke is invalid
+  if (!commerce_cardonfile_valid_token($token)) {
+    return FALSE;
+  }
+
+  return commerce_cardonfile_data_access('edit', $card_data, $owner);
+}
+
+/**
+ * Returns menu path title for toggle card default
+ */
+function commerce_cardonfile_data_toggle_default_card_callback_title($card_data) {
+  return !empty($card_data['instance_default']) ?
+    t('Current Default') :
+    t('Set as Default');
+}
+
+/**
+ * Toggle the card data's default flag
+ */
+function commerce_cardonfile_data_toggle_default_card_callback($card_data, $owner, $token) {
+  commerce_cardonfile_data_toggle_default_card($card_data);
+  commerce_cardonfile_redirect_to_user($owner);
+}
+
+/**
+ * Load the owners default cards
+ *
+ * @param $owner
+ *   The user object of the owner
+ * @param $instance_id
+ *   The payment method instance id
+ *
+ * @return
+ *   An array of data arrays indexed by card_id.
+ */
+function commerce_cardonfile_data_load_user_default_cards($owner_uid, $instance_id = NULL) {
+  $conditions = array(
+    'uid' => $owner_uid,
+    'status' => 1,
+    'instance_default' => 1,
+  );
+
+  if (!empty($instance_id)) {
+    $conditions['instance_id'] = $instance_id;
+  }
+
+  $cards = commerce_cardonfile_data_load_multiple_by_id(array(), $conditions);
+  return $cards;
+}
+
+/**
+ * Ensures that there is only 1 default per user per instance_id
+ *
+ * @param $card_data
+ *   The card data array to ensure against, usually the inserted or updated data.
+ *
+ * @return
+ *   The number of records updated
+ */
+function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
+  if (empty($card_data['instance_default']) ||
+      empty($card_data['instance_id']) ||
+      empty($card_data['uid']) ||
+      empty($card_data['card_id'])) {
+    return 0;
+  }
+
+  $num_updated = db_update('commerce_card_data')
+    ->fields(array(
+      'instance_default' => 0,
+    ))
+    ->condition('uid', $card_data['uid'])
+    ->condition('instance_id', $card_data['instance_id'])
+    ->condition('card_id', $card_data['card_id'], '<>')
+    ->execute();
+
+  return $num_updated;
+}
+
+
+// -----------------------------------------------------------------------
+// Token handling
+
+/**
+ * Returns the session token for this module
+ */
+function commerce_cardonfile_get_token() {
+  return drupal_get_token('commerce_cardonfile_70k3N');
+}
+
+/**
+ * Returns TRUE if session token is valid token created by this module
+ */
+function commerce_cardonfile_valid_token($token) {
+  return drupal_valid_token($token, 'commerce_cardonfile_70k3N');
 }
 
 

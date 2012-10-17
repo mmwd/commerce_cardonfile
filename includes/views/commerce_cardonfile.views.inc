@@ -292,6 +292,24 @@ function commerce_cardonfile_views_data() {
     ),
   );
 
+  // Default card
+  $data['commerce_card_data']['instance_default'] = array(
+    'title' => t('Default card'),
+    'help' => t('Whether or not this is the default card for the Payment Instance ID..'),
+    'field' => array(
+      'handler' => 'views_handler_field_boolean',
+      'click sortable' => TRUE,
+    ),
+    'filter' => array(
+      'handler' => 'views_handler_filter_boolean_operator',
+      'label' => t('Default'),
+      'type' => 'yes-no',
+    ),
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+  );
+
   // Operation links
   $data['commerce_card_data']['operations'] = array(
     'field' => array(
