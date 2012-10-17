@@ -212,7 +212,13 @@ function commerce_cardonfile_permission() {
     ),
     'manage own card data' => array(
       'title' => t('Manage own card data'),
-      'description' => t('Manage your own stored card data via a tab on your user account page.'),
+    ),
+    'create any card data' => array(
+      'title' => t('Create any card data'),
+      'restrict access' => TRUE,
+    ),
+    'create own card data' => array(
+      'title' => t('Create own card data'),
     ),
   );
 }
