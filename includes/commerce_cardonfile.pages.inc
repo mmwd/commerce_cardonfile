@@ -43,7 +43,11 @@ function commerce_cardonfile_create_form($form, &$form_state, $instance_id = NUL
   $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
 
   // Attach card edit form
-  _commerce_cardonfile_attach_card_edit_form($form, $form_state);
+  $card_fields = array('code' => '');
+  _commerce_cardonfile_attach_card_edit_form($form, $form_state, $payment_method, $card_fields);
+
+  // Attach billing address
+  _commerce_cardonfile_attach_billing_address_edit_form($form, $form_state, $payment_method);
 
   // disable entire form if no update callback
   $form['#disabled'] = empty($create_callback);
@@ -68,7 +72,7 @@ function commerce_cardonfile_create_form_validate($form, &$form_state) {
  * Create Form submit handler
  */
 function commerce_cardonfile_create_form_submit($form, &$form_state) {
-  $values =& $form_state['values'];
+  $values = &$form_state['values'];
   $owner = $values['card_owner'];
   $instance_id = $values['instance_id'];
   $payment_method = commerce_payment_method_instance_load($instance_id);
@@ -173,7 +177,12 @@ function commerce_cardonfile_update_form($form, &$form_state, $card_data = array
   }
 
   // Attach card edit form
-  _commerce_cardonfile_attach_card_edit_form($form, $form_state, $card_default_values, $address_default_values);
+  $card_fields = array();
+  _commerce_cardonfile_attach_card_edit_form($form, $form_state, $payment_method, $card_fields, $card_default_values);
+  $form['credit_card']['number']['#description'] = t('Leaving this field alone will leave the current card number unchanged.');
+
+  // Attach billing address
+  _commerce_cardonfile_attach_billing_address_edit_form($form, $form_state, $payment_method, $address_default_values);
 
   // disable entire form if no update callback
   $form['#disabled'] = empty($update_callback);
@@ -194,18 +203,28 @@ function commerce_cardonfile_update_form_validate($form, &$form_state) {
   // Load the credit card helper functions from the Payment module.
   module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
 
-  // Ensure non-default values are valid numbers.
-  if ($form_state['values']['credit_card']['number'] != $form['credit_card']['number']['#default_value']) {
-    if (!commerce_payment_validate_credit_card_number($form_state['values']['credit_card']['number'])) {
-      form_set_error('credit_card][number', t('The credit card number you entered is invalid.'));
+  $card_form_parents = array();
+  $values = &$form_state['values'];
+
+  // Validate the credit card fields.
+  $card_validate_settings = array(
+    'form_parents' => array_merge($card_form_parents, array('credit_card')),
+  );
+
+  // create details array for card validate
+  $card_validate_details = $values['credit_card'];
+
+  // If card number was NOT empty on form creation
+  if (!empty($form['credit_card']['number']['#default_value'])) {
+    // Remove number from validation details if it contains "(Last 4)"
+    if (strpos($values['credit_card']['number'], '(') !== FALSE ) {
+      unset($card_validate_details['number']);
     }
   }
 
-  // Ensure the expiration date is not being updated to a past date.
-  $exp_valid = commerce_payment_validate_credit_card_exp_date($form_state['values']['credit_card']['exp_month'], $form_state['values']['credit_card']['exp_year']);
-
-  if ($exp_valid !== TRUE) {
-    form_set_error('credit_card][exp_' . $exp_valid, t('You have specified an expired credit card.'));
+  // validate all card info
+  if (!_commerce_cardonfile_credit_card_validate($card_validate_details, $card_validate_settings)) {
+    return FALSE;
   }
 }
 
@@ -213,7 +232,7 @@ function commerce_cardonfile_update_form_validate($form, &$form_state) {
  * Update Form submit handler
  */
 function commerce_cardonfile_update_form_submit($form, &$form_state) {
-  $values =& $form_state['values'];
+  $values = &$form_state['values'];
   $owner = $values['card_owner'];
 
   // Update the card data with items from the form.
@@ -252,9 +271,9 @@ function commerce_cardonfile_update_form_submit($form, &$form_state) {
 }
 
 /**
- * Returns the card edit form array with defaults
+ * Adds the card edit form array with defaults to the $form
  */
-function _commerce_cardonfile_attach_card_edit_form(&$form, &$form_state, $card_default_values = array(), $address_default_values = array()) {
+function _commerce_cardonfile_attach_card_edit_form(&$form, &$form_state, $payment_method, $card_fields = array(), $card_default_values = array()) {
   // Credit Card form
   // Load the credit card helper functions from the Payment module.
   module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
@@ -262,11 +281,33 @@ function _commerce_cardonfile_attach_card_edit_form(&$form, &$form_state, $card_
   if (!is_array($card_default_values) || empty($card_default_values)) {
     $card_default_values = array();
   }
-  $form += commerce_payment_credit_card_form(array('owner' => TRUE), $card_default_values);
-  $form['credit_card']['number']['#description'] = t('Leaving this field alone will leave the current card number unchanged.');
 
+  if (!is_array($card_fields) || empty($card_fields)) {
+    $card_fields = array();
+  }
 
-  // Address form
+  // ensure owner
+  $card_fields += array('owner' => TRUE);
+
+  // add card types if there is a payment setting for 'card_types'
+  if (!isset($fields['type']) && isset($payment_method['settings']['card_types'])) {
+    // Add the credit card types array if necessary.
+    $card_types = array_diff(array_values($payment_method['settings']['card_types']), array(0));
+
+    if (!empty($card_types)) {
+      $card_fields['type'] = $card_types;
+    }
+  }
+
+  // generate card form
+  $form += commerce_payment_credit_card_form($card_fields, $card_default_values);
+}
+
+/**
+ * Adds the billing address edit form array with defaults to the $form
+ */
+function _commerce_cardonfile_attach_billing_address_edit_form(&$form, &$form_state, $payment_method, $address_default_values = array()) {
+  // Set defaults
   if (!is_array($address_default_values) || empty($address_default_values)) {
     $address_default_values = array();
   }
@@ -276,7 +317,7 @@ function _commerce_cardonfile_attach_card_edit_form(&$form, &$form_state, $card_
 
   // add address to form in a separate container
   if (!empty($address_field_form)) {
-    $form['card_billing_address'] = array(
+    $form['credit_card_billing_address'] = array(
       '#type' => 'container',
       '0' => $address_field_form,
     );

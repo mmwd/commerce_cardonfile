@@ -831,3 +831,75 @@ function _commerce_cardonfile_get_credit_card_type($number) {
 
   return $card_type;
 }
+
+/**
+ * Validates a set of credit card details entered via the credit card form.
+ * Rewrite of commerce_payment_credit_card_validate() with conditional
+ * card number and expiration
+ *
+ * @param $details
+ *   An array of credit card details as retrieved from the credit card array in
+ *   the form values of a form containing the credit card form.
+ * @param $settings
+ *   Settings used for calling validation functions and setting form errors:
+ *   - form_parents: an array of parent elements identifying where the credit
+ *     card form was situated in the form array
+ *
+ * @return
+ *   TRUE or FALSE indicating the validity of all the data.
+ *
+ * @see commerce_payment_credit_card_form()
+ */
+function _commerce_cardonfile_credit_card_validate($details, $settings) {
+  $prefix = implode('][', $settings['form_parents']) . '][';
+  $valid = TRUE;
+
+  // Validate the credit card type.
+  if (!empty($details['valid_types'])) {
+    if (isset($details['number'])) {
+      $type = commerce_payment_validate_credit_card_type($details['number'], $details['valid_types']);
+      if ($type === FALSE) {
+        form_set_error($prefix . 'type', t('You have entered a credit card number of an unsupported card type.'));
+        $valid = FALSE;
+      }
+      elseif ($type != $details['type']) {
+        form_set_error($prefix . 'number', t('You have entered a credit card number that does not match the type selected.'));
+        $valid = FALSE;
+      }
+    }
+  }
+
+  // Validate the credit card number.
+  if (isset($details['number']) && !commerce_payment_validate_credit_card_number($details['number'])) {
+    form_set_error($prefix . 'number', t('You have entered an invalid credit card number.'));
+    $valid = FALSE;
+  }
+
+  // Validate the expiration date.
+  if (isset($details['exp_month']) && isset($details['exp_year'])) {
+    if (($invalid = commerce_payment_validate_credit_card_exp_date($details['exp_month'], $details['exp_year'])) !== TRUE) {
+      form_set_error($prefix . 'exp_' . $invalid, t('You have entered an expired credit card.'));
+      $valid = FALSE;
+    }
+  }
+
+  // Validate the security code if present.
+  if (isset($details['code']) && isset($details['number']) && !commerce_payment_validate_credit_card_security_code($details['number'], $details['code'])) {
+    form_set_error($prefix . 'code', t('You have entered an invalid card security code.'));
+    $valid = FALSE;
+  }
+
+  // Validate the start date if present.
+  if (isset($details['start_date']) && ($invalid = commerce_payment_validate_credit_card_start_date($details['exp_month'], $details['exp_year'])) !== TRUE) {
+    form_set_error($prefix . 'start_' . $invalid, t('Your have entered an invalid start date.'));
+    $valid = FALSE;
+  }
+
+  // Validate the issue number if present.
+  if (isset($details['issue']) && !commerce_payment_validate_credit_card_issue($details['issue'])) {
+    form_set_error($prefix . 'issue', t('You have entered an invalid issue number.'));
+    $valid = FALSE;
+  }
+
+  return $valid;
+}
