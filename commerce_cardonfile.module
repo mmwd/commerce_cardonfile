@@ -86,115 +86,6 @@ function commerce_cardonfile_menu() {
 }
 
 /**
- * Determines if the current user has access to the specified account's "Stored
- * payment methods" tab.
- */
-function commerce_cardonfile_user_access($account) {
-  global $user;
-
-  // Grant access for any user with administer permission.
-  if (user_access('administer card data')) {
-    return TRUE;
-  }
-
-  // create a stub data array for access checks
-  $card_data_stub = commerce_cardonfile_data_new(array(
-    'uid' => $account->uid,
-  ));
-
-  // DENY if the user DOES NOT have view access
-  if (!commerce_cardonfile_data_access('view', $card_data_stub, $account)) {
-    return FALSE;
-  }
-
-  // DENY if the user DOES NOT have create access AND NO cards on file
-  if (!commerce_cardonfile_data_access('create', $card_data_stub, $account)) {
-    // DENY if the user DOES NOT have any cards
-    $stored_cards = commerce_cardonfile_data_load_multiple($account->uid);
-    if (empty($stored_cards)) {
-      return FALSE;
-    }
-  }
-
-  // ALLOW by default
-  return TRUE;
-}
-
-
-/**
- * Determines if the current user has access to perform an operation on the
- * given card data array.
- *
- * @param $op
- *   The operation being performed. One of 'view', 'edit', 'update', 'manage',
- *   'create' or 'delete'.
- * @param $card_data
- *   The card data array
- * @param $owner
- *   The user account for the card owner
- *
- * @return
- *   TRUE if the current user has access
- */
-function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $owner = NULL) {
-  global $user;
-
-  // resolve operation
-  if (empty($op)) {
-    $op = 'view';
-  }
-  elseif ($op == 'manage' || $op == 'update') {
-    $op = 'edit';
-  }
-
-  // resolve owner uid
-  $owner_uid = NULL;
-  if (!empty($card_data['uid'])) {
-    $owner_uid = $card_data['uid'];
-  }
-  elseif (!empty($owner->uid)) {
-    $owner_uid = $owner->uid;
-  }
-
-  // DENY if callback does NOT exist for specific operations
-  if (!empty($card_data['instance_id'])) {
-    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
-    $callback = TRUE;
-    switch ($op) {
-      case 'create':
-        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
-        break;
-
-      case 'delete':
-        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
-        break;
-
-      default:
-        $callback = TRUE;
-        break;
-    }
-
-    // DENY if no callback
-    if (empty($callback)) {
-      return FALSE;
-    }
-  }
-
-  // ALLOW access for any user with administer permission.
-  if (user_access('administer card data') || user_access("$op any card data")) {
-    return TRUE;
-  }
-
-  // ALLOW access for users with permission to manage their own card data.
-  if (!empty($user->uid) && $user->uid == $owner_uid && user_access("$op own card data")) {
-    return TRUE;
-  }
-
-  // DENY by default
-  return FALSE;
-}
-
-/**
  * Redirects from a would be card data page to the user's stored payment methods tab.
  */
 function commerce_cardonfile_redirect_to_user($account) {
@@ -470,56 +361,6 @@ function commerce_cardonfile_options_list($stored_cards, $element = 'radios', $d
   return $options;
 }
 
-/**
- * Returns the human readable title of any or all data statuses.
- *
- * @param $name
- *   Optional parameter specifying the name of the status whose title
- *     to return.
- *
- * @return
- *   Either an array of all status titles keyed by the status_id or a
- *     string containing the human readable title for the specified status. If a
- *     status is specified that does not exist, this function returns FALSE.
- */
-function commerce_cardonfile_data_status_get_title($name = NULL) {
-  $statuses = commerce_cardonfile_data_statuses();
-
-  // Return a status title if specified and it exists.
-  if (!empty($name)) {
-    if (isset($statuses[$name])) {
-      return $statuses[$name];
-    }
-    else {
-      // Return FALSE if it does not exist.
-      return FALSE;
-    }
-  }
-
-  // Otherwise return all titles.
-  return $statuses;
-}
-
-/**
- * Wraps commerce_cardonfile_status_get_title().
- */
-function commerce_cardonfile_data_status_options_list() {
-  return commerce_cardonfile_data_status_get_title();
-}
-
-/**
- * Returns a list of cof data statuses
- */
-function commerce_cardonfile_data_statuses() {
-  $statuses = array(
-    0 => t('Inactive'),
-    1 => t('Active'),
-    2 => t('Not deletable'),
-  );
-
-  return $statuses;
-}
-
 
 // -----------------------------------------------------------------------
 // Payment method callback handling
@@ -665,6 +506,164 @@ function _commerce_cardonfile_payment_method_instances($method_id, $include_disa
 
 // -----------------------------------------------------------------------
 // Card data handling
+
+/**
+ * Returns a list of cof data statuses
+ */
+function commerce_cardonfile_data_statuses() {
+  $statuses = array(
+    0 => t('Inactive'),
+    1 => t('Active'),
+    2 => t('Not deletable'),
+  );
+
+  return $statuses;
+}
+
+/**
+ * Returns the human readable title of any or all data statuses.
+ *
+ * @param $name
+ *   Optional parameter specifying the name of the status whose title
+ *     to return.
+ *
+ * @return
+ *   Either an array of all status titles keyed by the status_id or a
+ *     string containing the human readable title for the specified status. If a
+ *     status is specified that does not exist, this function returns FALSE.
+ */
+function commerce_cardonfile_data_status_get_title($name = NULL) {
+  $statuses = commerce_cardonfile_data_statuses();
+
+  // Return a status title if specified and it exists.
+  if (!empty($name)) {
+    if (isset($statuses[$name])) {
+      return $statuses[$name];
+    }
+    else {
+      // Return FALSE if it does not exist.
+      return FALSE;
+    }
+  }
+
+  // Otherwise return all titles.
+  return $statuses;
+}
+
+/**
+ * Wraps commerce_cardonfile_status_get_title().
+ */
+function commerce_cardonfile_data_status_options_list() {
+  return commerce_cardonfile_data_status_get_title();
+}
+
+/**
+ * Determines if the current user has access to the specified account's "Stored
+ * payment methods" tab.
+ */
+function commerce_cardonfile_user_access($account) {
+  global $user;
+
+  // Grant access for any user with administer permission.
+  if (user_access('administer card data')) {
+    return TRUE;
+  }
+
+  // create a stub data array for access checks
+  $card_data_stub = commerce_cardonfile_data_new(array(
+    'uid' => $account->uid,
+  ));
+
+  // DENY if the user DOES NOT have view access
+  if (!commerce_cardonfile_data_access('view', $card_data_stub, $account)) {
+    return FALSE;
+  }
+
+  // DENY if the user DOES NOT have create access AND NO cards on file
+  if (!commerce_cardonfile_data_access('create', $card_data_stub, $account)) {
+    // DENY if the user DOES NOT have any cards
+    $stored_cards = commerce_cardonfile_data_load_multiple($account->uid);
+    if (empty($stored_cards)) {
+      return FALSE;
+    }
+  }
+
+  // ALLOW by default
+  return TRUE;
+}
+
+/**
+ * Determines if the current user has access to perform an operation on the
+ * given card data array.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'edit', 'update', 'manage',
+ *   'create' or 'delete'.
+ * @param $card_data
+ *   The card data array
+ * @param $owner
+ *   The user account for the card owner
+ *
+ * @return
+ *   TRUE if the current user has access
+ */
+function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $owner = NULL) {
+  global $user;
+
+  // resolve operation
+  if (empty($op)) {
+    $op = 'view';
+  }
+  elseif ($op == 'manage' || $op == 'update') {
+    $op = 'edit';
+  }
+
+  // resolve owner uid
+  $owner_uid = NULL;
+  if (!empty($card_data['uid'])) {
+    $owner_uid = $card_data['uid'];
+  }
+  elseif (!empty($owner->uid)) {
+    $owner_uid = $owner->uid;
+  }
+
+  // DENY if callback does NOT exist for specific operations
+  if (!empty($card_data['instance_id'])) {
+    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+    $callback = TRUE;
+    switch ($op) {
+      case 'create':
+        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
+        break;
+
+      case 'delete':
+        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
+        break;
+
+      default:
+        $callback = TRUE;
+        break;
+    }
+
+    // DENY if no callback
+    if (empty($callback)) {
+      return FALSE;
+    }
+  }
+
+  // ALLOW access for any user with administer permission.
+  if (user_access('administer card data') || user_access("$op any card data")) {
+    return TRUE;
+  }
+
+  // ALLOW access for users with permission to manage their own card data.
+  if (!empty($user->uid) && $user->uid == $owner_uid && user_access("$op own card data")) {
+    return TRUE;
+  }
+
+  // DENY by default
+  return FALSE;
+}
 
 /**
  * Returns an initialized product object.
