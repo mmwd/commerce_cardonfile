@@ -708,10 +708,18 @@ function commerce_cardonfile_data_save(&$card_data) {
   $return = FALSE;
   $card_data_original = NULL;
 
+  // Load original unchanged data
   if (!empty($card_data['card_id'])) {
     $card_data_original = commerce_cardonfile_data_load($card_data['card_id']);
   }
 
+  // Preprocess before saving and sending to hooks
+  if (!empty($card_data['card_number'])) {
+    // Always truncate card for security before passing to hooks
+    $card_data['card_number'] = substr($card_data['card_number'], -4);
+  }
+
+  // Save card data
   if (isset($card_data_original)) {
     // Update
     $card_data['changed'] = REQUEST_TIME;
