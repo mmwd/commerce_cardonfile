@@ -648,6 +648,11 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
     }
   }
 
+  // DENY delete if it is the instance_default
+  if ($op == 'delete' && !empty($card_data['instance_default'])) {
+    return FALSE;
+  }
+
   // ALLOW access for any user with administer permission.
   if (user_access('administer card data') || user_access("$op any card data")) {
     return TRUE;
