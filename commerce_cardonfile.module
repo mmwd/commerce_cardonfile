@@ -173,6 +173,9 @@ function commerce_cardonfile_theme() {
     'card_data_overview' => array(
       'variables' => array('card_data' => array()),
     ),
+    'commerce_cardonfile_data_label' => array(
+      'variables' => array('card_data' => array()),
+    ),
   );
 }
 
@@ -325,32 +328,11 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
  *   An options array for selecting a card on file.
  */
 function commerce_cardonfile_options_list($stored_cards, $element = 'radios', $different = TRUE) {
-  // Load the credit card helper functions from the Payment module.
-  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
-  $card_types = commerce_payment_credit_card_types();
-
   // Build an options array of stored credit cards.
   $options = array();
 
   foreach ($stored_cards as $card_id => $card_data) {
-    $replacement = array('@name' => $card_data['card_name'], '@number' => $card_data['card_number'], '@month' => str_pad($card_data['card_exp_month'], 2, '0', STR_PAD_LEFT), '@year' => $card_data['card_exp_year']);
-
-    if (!empty($card_types[$card_data['card_type']])) {
-      $replacement['@type'] = $card_types[$card_data['card_type']];
-    }
-    else {
-      $replacement['@type'] = 'Card';
-    }
-
-    // Use a longer format for radio button options.
-    if ($element == 'radios') {
-      $label = t('@type belonging to @name: Ends in @number, Expires @month/@year', $replacement);
-    }
-    else {
-      $label = t('@type ending in @number, Exp. @month/@year', $replacement);
-    }
-
-    $options[$card_id] = $label;
+    $options[$card_id] = theme('commerce_cardonfile_data_label', array('card_data' => $card_data));
   }
 
   // Add an option to use a different credit card if specified.
@@ -663,6 +645,33 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
 
   // DENY by default
   return FALSE;
+}
+
+/**
+ * Returns a label for the card data suitable for an options list
+ */
+function theme_commerce_cardonfile_data_label(&$vars) {
+  $card_data = $vars['card_data'];
+
+  // Load the credit card helper functions from the Payment module.
+  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  $card_types = commerce_payment_credit_card_types();
+
+  $replacement = array(
+    '@name' => $card_data['card_name'],
+    '@number' => $card_data['card_number'],
+    '@month' => str_pad($card_data['card_exp_month'], 2, '0', STR_PAD_LEFT),
+    '@year' => $card_data['card_exp_year'],
+  );
+
+  if (!empty($card_types[$card_data['card_type']])) {
+    $replacement['@type'] = $card_types[$card_data['card_type']];
+  }
+  else {
+    $replacement['@type'] = 'Card';
+  }
+
+  return t('@type ***@number, Expires @month/@year', $replacement);
 }
 
 /**
