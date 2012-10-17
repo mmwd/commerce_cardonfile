@@ -125,7 +125,7 @@ function commerce_cardonfile_schema() {
 }
 
 /**
- * Add a default column to card data table
+ * Add the instance_default column to card data table
  */
 function commerce_cardonfile_update_7101(&$sandbox) {
   if (!db_field_exists('commerce_card_data', 'instance_default')) {
@@ -140,4 +140,3 @@ function commerce_cardonfile_update_7101(&$sandbox) {
 
   return t('Card data table has been updated.');
 }
-
