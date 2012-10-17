@@ -27,7 +27,7 @@ function commerce_cardonfile_menu() {
     'page callback' => 'commerce_cardonfile_redirect_to_user',
     'page arguments' => array(1),
     'access callback' => 'commerce_cardonfile_data_access',
-    'access arguments' => array(3),
+    'access arguments' => array('view', 3),
   );
 
   $items['user/%user/stored-payment-methods/%commerce_cardonfile_data/update'] = array(
@@ -36,7 +36,7 @@ function commerce_cardonfile_menu() {
     'page callback' => 'commerce_cardonfile_update_page',
     'page arguments' => array(3, 1),
     'access callback' => 'commerce_cardonfile_data_access',
-    'access arguments' => array(3, 'update'),
+    'access arguments' => array('edit', 3, 1),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
     'file' => 'includes/commerce_cardonfile.pages.inc',
@@ -48,7 +48,7 @@ function commerce_cardonfile_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('commerce_cardonfile_delete_form', 3),
     'access callback' => 'commerce_cardonfile_data_access',
-    'access arguments' => array(3, 'delete'),
+    'access arguments' => array('delete', 3, 1),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
     'weight' => 10,
@@ -64,13 +64,17 @@ function commerce_cardonfile_menu() {
     }
 
     foreach ($payment_method_instances as $instance_id => $payment_method) {
+      $new_card_data = commerce_cardonfile_data_new(array(
+        'instance_id' => $instance_id,
+        'payment_method' => $payment_method['method_id'],
+      ));
       $items['user/%user/stored-payment-methods/add/' . drupal_hash_base64($instance_id)] = array(
         'title' => 'Add a !name',
         'title arguments' => array('!name' => $payment_method['display_title']),
         'page callback' => 'commerce_cardonfile_create_page',
-        'page arguments' => array($instance_id, 1),
-        'access callback' => 'commerce_cardonfile_create_access',
-        'access arguments' => array($instance_id, 1),
+        'page arguments' => array($new_card_data, 1),
+        'access callback' => 'commerce_cardonfile_data_access',
+        'access arguments' => array('create', $new_card_data, 1),
         'type' => MENU_LOCAL_ACTION,
         'file' => 'includes/commerce_cardonfile.pages.inc',
       );
@@ -88,72 +92,73 @@ function commerce_cardonfile_menu() {
 function commerce_cardonfile_user_access($account) {
   global $user;
 
-  // Only show the tab if a user actually has card data on file.
-  $stored_cards = commerce_cardonfile_data_load_multiple($account->uid);
-
-  if (empty($stored_cards)) {
-    return FALSE;
-  }
-
   // Grant access for any user with administer permission.
   if (user_access('administer card data')) {
     return TRUE;
   }
 
-  // Grant access for users with permission to manage their own card data.
-  if ($user->uid && user_access('manage own card data') && $user->uid == $account->uid) {
-    return TRUE;
-  }
+  // create a stub data array for access checks
+  $card_data_stub = commerce_cardonfile_data_new(array(
+    'uid' => $account->uid,
+  ));
 
-  return FALSE;
-}
-
-/**
- * Determines if the current user has access to create a card for the account
- *
- * @param $method_id
- *   The payment method id
- * @param $account
- *   The user account that will be the card owner
- *
- * @return
- *   TRUE if the current user has access
- */
-function commerce_cardonfile_create_access($instance_id, $account) {
-  $payment_method = commerce_payment_method_instance_load($instance_id);
-  $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
-
-  // DENY if no create callback
-  if (empty($create_callback)) {
+  // DENY if the user DOES NOT have view access
+  if (!commerce_cardonfile_data_access('view', $card_data_stub, $account)) {
     return FALSE;
   }
 
-/** @todo check admin access (create any for anyone), create any for own, create method_id for own ******/
+  // DENY if the user DOES NOT have create access AND NO cards on file
+  if (!commerce_cardonfile_data_access('create', $card_data_stub, $account)) {
+    // DENY if the user DOES NOT have any cards
+    $stored_cards = commerce_cardonfile_data_load_multiple($account->uid);
+    if (empty($stored_cards)) {
+      return FALSE;
+    }
+  }
+
+  // ALLOW by default
   return TRUE;
 }
+
 
 /**
  * Determines if the current user has access to perform an operation on the
  * given card data array.
  *
+ * @param $op
+ *   The operation being performed. One of 'view', 'edit', 'update', 'manage',
+ *   'create' or 'delete'.
  * @param $card_data
  *   The card data array
- * @param $op
- *   The operation being performed. One of 'view', 'update', 'create' or
- *   'delete'.
+ * @param $owner
+ *   The user account for the card owner
  *
  * @return
  *   TRUE if the current user has access
  */
-function commerce_cardonfile_data_access($card_data = array(), $op = 'view') {
+function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $owner = NULL) {
   global $user;
+
+  // resolve operation
+  if (empty($op)) {
+    $op = 'view';
+  }
+  elseif ($op == 'manage' || $op == 'update') {
+    $op = 'edit';
+  }
+
+  // resolve owner uid
+  $owner_uid = NULL;
+  if (!empty($card_data['uid'])) {
+    $owner_uid = $card_data['uid'];
+  }
+  elseif (!empty($owner->uid)) {
+    $owner_uid = $owner->uid;
+  }
 
   // DENY if callback does NOT exist for specific operations
   if (!empty($card_data['instance_id'])) {
     $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
-
-
-    $op = !empty($op) ? $op : 'view';
     $callback = TRUE;
     switch ($op) {
       case 'create':
@@ -169,22 +174,23 @@ function commerce_cardonfile_data_access($card_data = array(), $op = 'view') {
         break;
     }
 
-    // DENY
+    // DENY if no callback
     if (empty($callback)) {
       return FALSE;
     }
   }
 
-  // Grant access for any user with administer permission.
-  if (user_access('administer card data')) {
+  // ALLOW access for any user with administer permission.
+  if (user_access('administer card data') || user_access("$op any card data")) {
     return TRUE;
   }
 
-  // Grant access for users with permission to manage their own card data.
-  if ($user->uid && user_access('manage own card data') && $user->uid == $card_data['uid']) {
+  // ALLOW access for users with permission to manage their own card data.
+  if (!empty($user->uid) && $user->uid == $owner_uid && user_access("$op own card data")) {
     return TRUE;
   }
 
+  // DENY by default
   return FALSE;
 }
 
@@ -210,8 +216,12 @@ function commerce_cardonfile_permission() {
       'description' => t("Access and update any user's stored card data."),
       'restrict access' => TRUE,
     ),
-    'manage own card data' => array(
-      'title' => t('Manage own card data'),
+    'view any card data' => array(
+      'title' => t('View any card data'),
+      'restrict access' => TRUE,
+    ),
+    'view own card data' => array(
+      'title' => t('View own card data'),
     ),
     'create any card data' => array(
       'title' => t('Create any card data'),
@@ -219,6 +229,20 @@ function commerce_cardonfile_permission() {
     ),
     'create own card data' => array(
       'title' => t('Create own card data'),
+    ),
+    'edit any card data' => array(
+      'title' => t('Edit any card data'),
+      'restrict access' => TRUE,
+    ),
+    'edit own card data' => array(
+      'title' => t('Edit own card data'),
+    ),
+    'delete any card data' => array(
+      'title' => t('Delete any card data'),
+      'restrict access' => TRUE,
+    ),
+    'delete own card data' => array(
+      'title' => t('Delete own card data'),
     ),
   );
 }
@@ -302,6 +326,10 @@ function theme_card_data_overview($variables) {
 
   return '<div class="commerce-card-data">' . $output . '</div>';
 }
+
+
+// -----------------------------------------------------------------------
+// Checkout
 
 /**
  * Implements hook_form_alter().
@@ -492,6 +520,10 @@ function commerce_cardonfile_data_statuses() {
   return $statuses;
 }
 
+
+// -----------------------------------------------------------------------
+// Payment method callback handling
+
 /**
  * Returns an array of all available payment method cardonfile callbacks
  */
@@ -631,6 +663,44 @@ function _commerce_cardonfile_payment_method_instances($method_id, $include_disa
 }
 
 
+// -----------------------------------------------------------------------
+// Card data handling
+
+/**
+ * Returns an initialized product object.
+ *
+ * @param $type
+ *   The machine-readable type of the product.
+ *
+ * @return
+ *   A product object with all default fields initialized.
+ */
+function commerce_cardonfile_data_new($values = array()) {
+  $data = array();
+
+  // initialize with given values
+  if (is_array($values)) {
+    $data = $values;
+  }
+
+  // merge in defaults
+  $data += array(
+    'card_id' => NULL,
+    'uid' => NULL,
+    'payment_method' => '',
+    'instance_id' => '',
+    'remote_id' => '',
+    'card_type' => '',
+    'card_name' => '',
+    'card_number' => '',
+    'card_exp_month' => '',
+    'card_exp_year' => '',
+    'status' => 1,
+  );
+
+  return $data;
+}
+
 /**
  * Loads stored card data by ID.
  *
@@ -769,8 +839,9 @@ function commerce_cardonfile_data_delete($card_id) {
   }
 }
 
+
 // -----------------------------------------------------------------------
-// Billing address handling
+// Helpers
 
 /**
  * Create a billing addressfield form outside of customer profile

@@ -13,11 +13,11 @@
  * @param $owner
  *   The user object of the card owner
  */
-function commerce_cardonfile_create_page($instance_id, $owner) {
+function commerce_cardonfile_create_page($card_data, $owner) {
   // Set the title of the page.
   drupal_set_title(t('Add a credit card'));
 
-  return drupal_get_form('commerce_cardonfile_create_form', $instance_id, $owner);
+  return drupal_get_form('commerce_cardonfile_create_form', $card_data, $owner);
 }
 
 /**
@@ -26,21 +26,24 @@ function commerce_cardonfile_create_page($instance_id, $owner) {
  * @param $card_data
  *   The data array representing a card on file.
  */
-function commerce_cardonfile_create_form($form, &$form_state, $instance_id = NULL, $owner = NULL) {
-  $form['instance_id'] = array(
+function commerce_cardonfile_create_form($form, &$form_state, $card_data, $owner) {
+  $form['card_data'] = array(
     '#type' => 'value',
-    '#value' => $instance_id,
+    '#value' => $card_data,
   );
 
-  $owner = !empty($owner) ? $owner : NULL;
   $form['card_owner'] = array(
     '#type' => 'value',
     '#value' => $owner,
   );
 
-  // get payment method info
-  $payment_method = commerce_payment_method_instance_load($instance_id);
-  $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
+  $payment_method = array();
+  $create_callback = NULL;
+  if (!empty($card_data['instance_id'])) {
+    // get payment method info
+    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+    $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
+  }
 
   // Attach card edit form
   $card_fields = array('code' => '');
@@ -74,13 +77,15 @@ function commerce_cardonfile_create_form_validate($form, &$form_state) {
 function commerce_cardonfile_create_form_submit($form, &$form_state) {
   $values = &$form_state['values'];
   $owner = $values['card_owner'];
-  $instance_id = $values['instance_id'];
+  $card_data = $values['card_data'];
+
+  $instance_id = $card_data['instance_id'];
   $payment_method = commerce_payment_method_instance_load($instance_id);
 
   // Determine the credit card type if possible for use in later code.
   $card_type = _commerce_cardonfile_get_credit_card_type($values['credit_card']['number']);
 
-  // Update the card data with items from the form.
+  // Update and merge the card data with items from the form.
   $card_data = array(
     'uid' => $owner->uid,
     'instance_id' => $instance_id,
@@ -91,7 +96,7 @@ function commerce_cardonfile_create_form_submit($form, &$form_state) {
     'card_exp_month' => $values['credit_card']['exp_month'],
     'card_exp_year' => $values['credit_card']['exp_year'],
     'status' => 1,
-  );
+  ) + $card_data;
 
   // Invoke the payment method's callback.
   $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');

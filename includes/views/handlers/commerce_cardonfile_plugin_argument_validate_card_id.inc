@@ -15,7 +15,7 @@ class commerce_cardonfile_plugin_argument_validate_card_id extends views_plugin_
     if (is_numeric($argument) && $argument == intval($argument)) {
       $card_data = commerce_cardonfile_data_load($argument);
       if (!empty($card_data) && is_array($card_data)) {
-        if (commerce_cardonfile_data_access($card_data)) {
+        if (commerce_cardonfile_data_access('view', $card_data)) {
           $this->_set_allowed_argument($card_data);
           return TRUE;
         }
