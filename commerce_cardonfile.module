@@ -1104,14 +1104,17 @@ function commerce_cardonfile_billing_address_form(&$form, &$form_state, $default
   // Merge values with addressfield defaults
   $values += addressfield_default_values();
 
-  // hide name elements
+  // Remove names
   if (empty($include_name_lines)) {
-    unset($instance['widget']['settings']['format_handlers']['name-full']);
-    unset($instance['widget']['settings']['format_handlers']['name-oneline']);
+    // remove names from format handlers
+    $name_format_handlers = array('name-full', 'name-oneline');
+    $format_handlers = &$instance['widget']['settings']['format_handlers'];
+    $format_handlers = array_diff($format_handlers, $name_format_handlers);
+    unset($format_handlers);
 
-    unset($values['first_name']);
-    unset($values['last_name']);
-    unset($values['name_line']);
+    // remove names from values
+    $name_element_keys = array('first_name', 'last_name', 'name_line');
+    $values = array_diff_key($values, array_flip($name_element_keys));
   }
 
   // initialize parents for field_default_form
