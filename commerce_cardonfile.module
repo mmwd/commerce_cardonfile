@@ -63,7 +63,7 @@ function commerce_cardonfile_menu() {
     'description' => 'Toggle the default flag for a stored payment method.',
     'page callback' => 'commerce_cardonfile_data_toggle_default_card_callback',
     'page arguments' => array(3, 1, 4),
-    'access callback' => 'commerce_cardonfile_data_toggle_default_card_access',
+    'access callback' => 'commerce_cardonfile_data_toggle_default_card_callback_access',
     'access arguments' => array(3, 1, 4),
     'type' => MENU_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
@@ -967,9 +967,14 @@ function commerce_cardonfile_data_toggle_default_card($card_data) {
 /**
  * Determines if the current user has access to toggle the default card
  */
-function commerce_cardonfile_data_toggle_default_card_access($card_data, $owner, $token) {
-  // DENY of toke is invalid
+function commerce_cardonfile_data_toggle_default_card_callback_access($card_data, $owner, $token) {
+  // DENY if token is invalid
   if (!commerce_cardonfile_valid_token($token)) {
+    return FALSE;
+  }
+
+  // DENY if already default
+  if (!empty($card_data['instance_default'])) {
     return FALSE;
   }
 

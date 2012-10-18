@@ -52,6 +52,18 @@ function commerce_cardonfile_views_default_views() {
   $handler->display->display_options['fields']['instance_id']['table'] = 'commerce_card_data';
   $handler->display->display_options['fields']['instance_id']['field'] = 'instance_id';
   $handler->display->display_options['fields']['instance_id']['exclude'] = TRUE;
+  /* Field: Commerce Card on File: Default card */
+  $handler->display->display_options['fields']['instance_default']['id'] = 'instance_default';
+  $handler->display->display_options['fields']['instance_default']['table'] = 'commerce_card_data';
+  $handler->display->display_options['fields']['instance_default']['field'] = 'instance_default';
+  $handler->display->display_options['fields']['instance_default']['label'] = '';
+  $handler->display->display_options['fields']['instance_default']['alter']['alter_text'] = TRUE;
+  $handler->display->display_options['fields']['instance_default']['alter']['text'] = '<strong>Current Default Card</strong>';
+  $handler->display->display_options['fields']['instance_default']['element_label_colon'] = FALSE;
+  $handler->display->display_options['fields']['instance_default']['hide_empty'] = TRUE;
+  $handler->display->display_options['fields']['instance_default']['empty_zero'] = TRUE;
+  $handler->display->display_options['fields']['instance_default']['type'] = 'boolean';
+  $handler->display->display_options['fields']['instance_default']['not'] = 0;
   /* Field: Commerce Card on File: Name on the card */
   $handler->display->display_options['fields']['card_name']['id'] = 'card_name';
   $handler->display->display_options['fields']['card_name']['table'] = 'commerce_card_data';
@@ -105,6 +117,20 @@ function commerce_cardonfile_views_default_views() {
   $handler->display->display_options['fields']['operations']['label'] = '';
   $handler->display->display_options['fields']['operations']['element_label_colon'] = FALSE;
   $handler->display->display_options['fields']['operations']['add_destination'] = 0;
+  /* Sort criterion: Commerce Card on File: Payment Method Instance ID */
+  $handler->display->display_options['sorts']['instance_id']['id'] = 'instance_id';
+  $handler->display->display_options['sorts']['instance_id']['table'] = 'commerce_card_data';
+  $handler->display->display_options['sorts']['instance_id']['field'] = 'instance_id';
+  /* Sort criterion: Commerce Card on File: Default card */
+  $handler->display->display_options['sorts']['instance_default']['id'] = 'instance_default';
+  $handler->display->display_options['sorts']['instance_default']['table'] = 'commerce_card_data';
+  $handler->display->display_options['sorts']['instance_default']['field'] = 'instance_default';
+  $handler->display->display_options['sorts']['instance_default']['order'] = 'DESC';
+  /* Sort criterion: Commerce Card on File: Card ID */
+  $handler->display->display_options['sorts']['card_id']['id'] = 'card_id';
+  $handler->display->display_options['sorts']['card_id']['table'] = 'commerce_card_data';
+  $handler->display->display_options['sorts']['card_id']['field'] = 'card_id';
+  $handler->display->display_options['sorts']['card_id']['order'] = 'DESC';
   /* Contextual filter: Commerce Card on File: Uid */
   $handler->display->display_options['arguments']['uid']['id'] = 'uid';
   $handler->display->display_options['arguments']['uid']['table'] = 'commerce_card_data';
