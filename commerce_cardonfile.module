@@ -1066,25 +1066,32 @@ function commerce_cardonfile_billing_address_form(&$form, &$form_state, $default
   $field = field_info_field($field_name);
   $instance = field_info_instance($host_entity_type, $field_name, $host_bundle);
 
-  // hide name elements
-  if (empty($include_name_lines)) {
-    unset($instance['widget']['settings']['format_handlers']['name-full']);
-    unset($instance['widget']['settings']['format_handlers']['name-oneline']);
-  }
-
   // Set default values
   $values = array();
   if (!empty($default_values) && is_array($default_values)) {
     $values = $default_values;
   }
 
-  // Create field items with addressfield defaults
-  $items = array($values + addressfield_default_values());
+  // Merge values with addressfield defaults
+  $values += addressfield_default_values();
+
+  // hide name elements
+  if (empty($include_name_lines)) {
+    unset($instance['widget']['settings']['format_handlers']['name-full']);
+    unset($instance['widget']['settings']['format_handlers']['name-oneline']);
+
+    unset($values['first_name']);
+    unset($values['last_name']);
+    unset($values['name_line']);
+  }
 
   // initialize parents for field_default_form
   if (!isset($form['#parents'])){
     $form['#parents'] = array();
   }
+
+  // build pseudo item
+  $items = array($values);
 
   // Retrieve default form array
   return field_default_form($host_entity_type, $host_entity, $field, $instance, $langcode, $items, $form, $form_state, 0);
