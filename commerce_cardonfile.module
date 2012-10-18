@@ -73,7 +73,7 @@ function commerce_cardonfile_menu() {
   // create paths for each payment method
   $create_implements = commerce_cardonfile_payment_method_implements('create callback');
   foreach ($create_implements as $method_id => $method_function) {
-    $payment_method_instances = _commerce_cardonfile_payment_method_instances($method_id, FALSE);
+    $payment_method_instances = _commerce_cardonfile_payment_method_instances($method_id, TRUE);
     if (empty($payment_method_instances)) {
       continue;
     }
@@ -608,11 +608,13 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
   global $user;
 
   // resolve operation
-  if (empty($op)) {
-    $op = 'view';
-  }
-  elseif ($op == 'manage' || $op == 'update') {
+  if ($op == 'manage' || $op == 'update') {
     $op = 'edit';
+  }
+
+  // DENY if invalid operation
+  if (!in_array($op, array('view', 'edit', 'create', 'delete'))) {
+    return FALSE;
   }
 
   // resolve owner uid
@@ -624,32 +626,59 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
     $owner_uid = $owner->uid;
   }
 
-  // DENY if callback does NOT exist for specific operations
+  // load payment method instance and rule
+  $payment_method = array();
+  $payment_rule = NULL;
+
   if (!empty($card_data['instance_id'])) {
     $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
-    $callback = TRUE;
-    switch ($op) {
-      case 'create':
-        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
-        break;
-
-      case 'delete':
-        $callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
-        break;
-
-      default:
-        $callback = TRUE;
-        break;
-    }
-
-    // DENY if no callback
-    if (empty($callback)) {
-      return FALSE;
+    if (!empty($payment_method)) {
+      // Explode the method key into its component parts.
+      list($payment_method_id, $instance_rule_name) = explode('|', $payment_method['instance_id']);
+      $payment_rule = rules_config_load($instance_rule_name);
     }
   }
 
-  // DENY delete if it is the instance_default
-  if ($op == 'delete' && !empty($card_data['instance_default'])) {
+  // DENY for operations that require a payment method callback
+  if (empty($payment_method) && $op != 'view') {
+    return FALSE;
+  }
+
+  // Operation specific access checks
+  $op_callback = TRUE;
+  switch ($op) {
+    case 'edit':
+      // set operation callback
+      $op_callback = commerce_cardonfile_payment_method_callback($payment_method, 'update callback');
+      break;
+
+    case 'create':
+      // set operation callback
+      $op_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
+
+      // DENY if payment rule has been disabled
+      if ($op_callback && !empty($payment_rule) && empty($payment_rule->active)) {
+        return FALSE;
+      }
+      break;
+
+    case 'delete':
+      // DENY delete if it is the instance_default
+      if (!empty($card_data['instance_default'])) {
+        return FALSE;
+      }
+
+      // set operation callback
+      $op_callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
+      break;
+
+    default:
+      $op_callback = TRUE;
+      break;
+  }
+
+  // DENY if callback does NOT exist for specific operations
+  if (empty($op_callback)) {
     return FALSE;
   }
 
