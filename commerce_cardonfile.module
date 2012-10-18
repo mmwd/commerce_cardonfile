@@ -918,6 +918,14 @@ function commerce_cardonfile_data_save(&$card_data) {
     $card_data['created'] = REQUEST_TIME;
     $card_data['changed'] = REQUEST_TIME;
 
+    // Mark as default if this is the user's first active card for this instance_id
+    if (!empty($card_data['uid']) && !empty($card_data['instance_id'])) {
+      $instance_active_cards = commerce_cardonfile_data_load_multiple($card_data['uid'], $card_data['instance_id'], TRUE);
+      if (empty($instance_active_cards)) {
+        $card_data['instance_default'] = 1;
+      }
+    }
+
     $return = drupal_write_record('commerce_card_data', $card_data);
 
     // Notify other modules that this card data has been inserted.
