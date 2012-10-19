@@ -1,0 +1,32 @@
+<?php
+
+/**
+ * @file
+ * Installs the tables required by Commerce Card on File Reference.
+ */
+
+/**
+ * Implements hook_field_schema().
+ */
+function commerce_cardonfile_reference_field_schema($field) {
+  if ($field['type'] == 'commerce_cardonfile_reference') {
+    return array(
+      'columns' => array(
+        'card_id' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ),
+      ),
+      'indexes' => array(
+        'card_id' => array('card_id'),
+      ),
+      'foreign keys' => array(
+        'card_id' => array(
+          'table' => 'commerce_card_data',
+          'columns' => array('card_id' => 'card_id'),
+        ),
+      ),
+    );
+  }
+}
