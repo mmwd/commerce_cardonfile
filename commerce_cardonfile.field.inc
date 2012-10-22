@@ -345,16 +345,14 @@ function commerce_cardonfile_options_list($field, $instance, $entity_type, $enti
     // Add them to the options list in optgroups by payment instance id.
     $payment_instance_id = check_plain($card_data['instance_id']);
     $label = $card_id;
-    $replacements = array(
-      '!default' => !empty($card_data['instance_default']) ? t('(user\'s default)') : '',
-    );
+
     if (!empty($instance['widget']['type']) && $instance['widget']['type'] == 'options_select') {
-      $replacements += _commerce_cardonfile_data_card_replacements($card_data, '!');
-      $label = t('!card_type ***!card_number, Expires !card_exp_month/!card_exp_year !default', $replacements);
+      $replacements = _commerce_cardonfile_data_card_replacements($card_data, '!');
+      $label = t('!card_type ***!card_number, Expires !card_exp_month/!card_exp_year !instance_default', $replacements);
     }
     else {
-      $replacements += _commerce_cardonfile_data_card_replacements($card_data, '@');
-      $label = t('@card_type ***@card_number, Expires @card_exp_month/@card_exp_year !default', $replacements);
+      $replacements = _commerce_cardonfile_data_card_replacements($card_data, '@');
+      $label = t('@card_type ***@card_number, Expires @card_exp_month/@card_exp_year @instance_default', $replacements);
     }
 
     $options[$payment_instance_id][$card_id] = $label;

@@ -206,7 +206,7 @@ function commerce_cardonfile_update_form($form, &$form_state, $card_data = array
  */
 function commerce_cardonfile_update_form_validate($form, &$form_state) {
   // Load the credit card helper functions from the Payment module.
-  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  commerce_cardonfile_load_credit_card_helpers();
 
   $card_form_parents = array();
   $values = &$form_state['values'];
@@ -281,7 +281,7 @@ function commerce_cardonfile_update_form_submit($form, &$form_state) {
 function _commerce_cardonfile_attach_card_edit_form(&$form, &$form_state, $payment_method, $card_fields = array(), $card_default_values = array()) {
   // Credit Card form
   // Load the credit card helper functions from the Payment module.
-  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  commerce_cardonfile_load_credit_card_helpers();
 
   if (!is_array($card_default_values) || empty($card_default_values)) {
     $card_default_values = array();

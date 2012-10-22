@@ -8,7 +8,7 @@ class commerce_cardonfile_handler_field_card_type extends views_handler_field {
     $value = $this->get_value($values);
 
     // Load the credit card helper functions from the Payment module.
-    module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+    commerce_cardonfile_load_credit_card_helpers();
     $card_types = commerce_payment_credit_card_types();
 
     // Extract the name of the card type if possible.

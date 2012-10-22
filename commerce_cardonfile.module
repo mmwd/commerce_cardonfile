@@ -236,7 +236,7 @@ function theme_card_data_overview($variables) {
   $card_data = $variables['card_data'];
 
   // Load the credit card helper functions from the Payment module.
-  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  commerce_cardonfile_load_credit_card_helpers();
   $card_types = commerce_payment_credit_card_types();
 
   // Extract the name of the card type if possible.
@@ -369,79 +369,175 @@ function commerce_cardonfile_configure_order_type($bundle = NULL) {
  * file for future usage.
  */
 function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
-  // If the current form ID is for a checkout form...
-  if (strpos($form_id, 'commerce_checkout_form_') === 0) {
-    // And it specifies a valid checkout page...
-    if (commerce_checkout_page_load(substr($form_id, 23))) {
-      // And the current page's form includes the payment checkout pane...
-      if (!empty($form['commerce_payment'])) {
-        // Check to see if the currently selected payment method is Card on File
-        // enabled (via the cardonfile boolean in its info array).
-        $payment_method = commerce_payment_method_instance_load($form['commerce_payment']['payment_method']['#default_value']);
+  // Exit if the current form ID is for a checkout page form...
+  if (strpos($form_id, 'commerce_checkout_form_') !== 0 ||
+      !commerce_checkout_page_load(substr($form_id, 23))) {
+    return;
+  }
 
-        if (!empty($form_state['account']->uid) && !empty($payment_method['cardonfile']) && !empty($form['commerce_payment']['payment_details']['credit_card'])) {
-          // Add a checkbox to the credit card details container to store the
-          // credit card for future use.
-          $storage = variable_get('commerce_cardonfile_storage', 'opt-in');
+  // Exit if the current page's form does no include the payment checkout pane...
+  if (empty($form['commerce_payment'])) {
+    return;
+  }
 
-          if (in_array($storage, array('opt-in', 'opt-out'))) {
-            $form['commerce_payment']['payment_details']['credit_card']['cardonfile_store'] = array(
-              '#type' => 'checkbox',
-              '#title' => t('Store this credit card on file for future use.'),
-              '#default_value' => $storage == 'opt-out',
-            );
-          }
-          else {
-            $form['commerce_payment']['payment_details']['credit_card']['cardonfile_store'] = array(
-              '#type' => 'value',
-              '#value' => TRUE,
-            );
-          }
+  // DENY if user is not defined or is anonymous
+  if (!isset($form_state['account']) || empty($form_state['account']->uid)) {
+    return;
+  }
 
-          // Load any existing card data for the current payment method instance
-          // and user.
-          $stored_cards = commerce_cardonfile_data_load_multiple($form_state['account']->uid, $payment_method['instance_id']);
+  // Exit if no payment method instance id
+  if (empty($form['commerce_payment']['payment_method']['#default_value'])) {
+    return;
+  }
 
-          // Filter out expired cards.
-          foreach ($stored_cards as $card_id => $card_data) {
-            if ($card_data['card_exp_year'] < date('Y') ||
-              $card_data['card_exp_year'] == date('Y') && $card_data['card_exp_month'] < date('m')) {
-              unset($stored_cards[$card_id]);
-            }
-          }
+  // Exit if not a credit card based payment method
+  if (empty($form['commerce_payment']['payment_details']['credit_card'])) {
+    return;
+  }
 
-          // If we found any stored cards, show the options in the form.
-          if (!empty($stored_cards)) {
-            $element = variable_get('commerce_cardonfile_selector', 'radios');
-            $options = commerce_cardonfile_checkout_options_list($stored_cards, $element);
+  // Extact payment method instance id
+  $instance_id = $form['commerce_payment']['payment_method']['#default_value'];
 
-            $form['commerce_payment']['payment_details']['cardonfile'] = array(
-              '#type' => $element,
-              '#title' => t('Select a stored credit card'),
-              '#options' => $options,
-              '#default_value' => key($options),
-              '#weight' => -10,
-              '#ajax' => array(
-                'callback' => 'commerce_payment_pane_checkout_form_details_refresh',
-                'wrapper' => 'payment-details',
-              ),
-            );
+  // Check to see if the currently selected payment method is Card on File
+  // enabled (via the cardonfile boolean in its info array).
+  $payment_method = commerce_payment_method_instance_load($instance_id);
 
-            // If the current value for the card selection element is not to use
-            // a different credit card, then hide the credit card form elements.
-            if (empty($form_state['values']) || $form_state['values']['commerce_payment']['payment_details']['cardonfile'] !== 'new') {
-              $form['commerce_payment']['payment_details']['credit_card']['#access'] = FALSE;
-            }
+  // Exit if payment method is not capable of card on file
+  if (!_commerce_cardonfile_capable_payment_method_check($payment_method)) {
+    return;
+  }
 
-            // Add the CSS to hide a sole credit card icon if specified.
-            if (variable_get('commerce_cardonfile_hide_cc_radio_button', TRUE)) {
-              if (count($form['commerce_payment']['payment_method']['#options']) == 1) {
-                $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_cardonfile') . '/theme/commerce_cardonfile.checkout.css';
-              }
-            }
-          }
-        }
+  // Add a checkbox to the credit card details container to store the
+  // credit card for future use.
+  $storage = variable_get('commerce_cardonfile_storage', 'opt-in');
+
+  if (in_array($storage, array('opt-in', 'opt-out'))) {
+    $form['commerce_payment']['payment_details']['credit_card']['cardonfile_store'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Store this credit card on file for future use.'),
+      '#default_value' => $storage == 'opt-out',
+    );
+  }
+  else {
+    $form['commerce_payment']['payment_details']['credit_card']['cardonfile_store'] = array(
+      '#type' => 'value',
+      '#value' => TRUE,
+    );
+  }
+
+  // Load existing active cards for the payment method instance and user.
+  $stored_cards = commerce_cardonfile_data_load_multiple_by_id(array(), array(
+    'uid' => $form_state['account']->uid,
+    'instance_id' => $payment_method['instance_id'],
+    'status' => 1,
+  ));
+
+  // Exit if no cards on file
+  if (empty($stored_cards)) {
+    return;
+  }
+
+  // Filter out expired cards.
+  $valid_cards = array_filter($stored_cards, 'commerce_cardonfile_data_check_expiration');
+
+  // Exit if no VALID cards found
+  if (empty($valid_cards)) {
+    return;
+  }
+
+  // get options list with labels
+  $card_option_element_type = variable_get('commerce_cardonfile_selector', 'radios');
+  $card_options = commerce_cardonfile_checkout_options_list($valid_cards, $card_option_element_type);
+
+  // determine default option
+  $card_options_default_value = key($card_options);
+  foreach (array_keys($card_options) as $card_id) {
+    if (isset($valid_cards[$card_id]) && !empty($valid_cards[$card_id]['instance_default'])) {
+      $card_options_default_value = $card_id;
+
+      // move instance default to the top of the list
+      $card_option_label = $card_options[$card_id];
+      unset($card_options[$card_id]);
+      $card_options = array($card_id => $card_option_label) + $card_options;
+      break;
+    }
+  }
+
+  // create options element
+  $form['commerce_payment']['payment_details']['cardonfile'] = array(
+    '#type' => $card_option_element_type,
+    '#title' => t('Select a stored credit card'),
+    '#options' => $card_options,
+    '#default_value' => $card_options_default_value,
+    '#weight' => -10,
+    '#ajax' => array(
+      'callback' => 'commerce_payment_pane_checkout_form_details_refresh',
+      'wrapper' => 'payment-details',
+    ),
+  );
+
+  // If the current value for the card selection element is not to use
+  // a different credit card, then hide the credit card form elements.
+  if (empty($form_state['values']) || $form_state['values']['commerce_payment']['payment_details']['cardonfile'] !== 'new') {
+    $form['commerce_payment']['payment_details']['credit_card']['#access'] = FALSE;
+  }
+
+  // Add the CSS to hide a sole credit card icon if specified.
+  if (variable_get('commerce_cardonfile_hide_cc_radio_button', TRUE)) {
+    if (count($form['commerce_payment']['payment_method']['#options']) == 1) {
+      $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_cardonfile') . '/theme/commerce_cardonfile.checkout.css';
+    }
+  }
+
+  // Add submit handler
+  if (isset($form['buttons']['continue'])) {
+    $form['buttons']['continue']['#submit'][] = 'commerce_cardonfile_commerce_checkout_form_submit';
+  }
+}
+
+/**
+ * Checkout form submit callback to process card on file options
+ */
+function commerce_cardonfile_commerce_checkout_form_submit($form, &$form_state) {
+  if (!isset($form_state['order'])) {
+    return;
+  }
+
+  $values = &$form_state['values'];
+
+  if (!isset($values['commerce_payment']) ||
+      !isset($values['commerce_payment']['payment_details']['cardonfile'])) {
+    return;
+  }
+
+  // Load a fresh copy of the order stored in the form.
+  $order = commerce_order_load($form_state['order']->order_id);
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+
+  $account = $form_state['account'];
+  $instance_id = $values['commerce_payment']['payment_method'];
+
+  // get card on file value
+  $card_id_selected = $values['commerce_payment']['payment_details']['cardonfile'];
+  if ($card_id_selected != 'new') {
+    // Save card id to reference field
+    $order_wrapper->commerce_cardonfile = array('card_id' => intval($card_id_selected));
+    $order_wrapper->save();
+  }
+  elseif ($cof_last_inserts = _commerce_cardonfile_data_current_request_last_inserted()) {
+    $card_id_new = NULL;
+    // Assumes the new card is the current request's last inserted card that
+    // matches the user
+    foreach ($cof_last_inserts as $card_data) {
+      if ($card_data['uid'] == $account->uid && $card_data['instance_id'] == $instance_id) {
+        $card_id_new = $card_data['card_id'];
+        break;
       }
+    }
+
+    if (!empty($card_id_new)) {
+      $order_wrapper->commerce_cardonfile = array('card_id' => $card_id_new);
+      $order_wrapper->save();
     }
   }
 }
@@ -452,7 +548,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
  *
  * @param $stored_cards
  *   An array of stored card data arrays keyed by card_id.
- * @param $element
+ * @param $element_type
  *   The form element the options array will be for, 'radios' or 'select'.
  * @param $different
  *   Add an option to use a different credit card.
@@ -460,7 +556,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
  * @return
  *   An options array for selecting a card on file.
  */
-function commerce_cardonfile_checkout_options_list($stored_cards, $element = 'radios', $different = TRUE) {
+function commerce_cardonfile_checkout_options_list($stored_cards, $element_type = 'radios', $different = TRUE) {
   // Build an options array of stored credit cards.
   $options = array();
 
@@ -571,12 +667,25 @@ function _commerce_cardonfile_capable_payment_methods() {
   $capable_methods = array();
   $payment_methods = commerce_payment_methods();
   foreach ($payment_methods as $method_id => $payment_method) {
-    if (!empty($payment_method['cardonfile'])) {
+    if (_commerce_cardonfile_capable_payment_method_check($payment_method)) {
       $capable_methods[$method_id] = $payment_method;
     }
   }
 
   return $capable_methods;
+}
+
+/**
+ * Returns TRUE if a payment method is capable of card on file
+ *
+ * @param $payment_method
+ *   An associative array of payment method objects keyed by the method_id.
+ *
+ * @return
+ *  TRUE if payment method is capable of card on file
+ */
+function _commerce_cardonfile_capable_payment_method_check($payment_method) {
+  return !empty($payment_method['cardonfile']);
 }
 
 /**
@@ -857,7 +966,7 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
 function theme_commerce_cardonfile_data_label(&$vars) {
   $card_data = $vars['card_data'];
   $replacements = _commerce_cardonfile_data_card_replacements($card_data, '@');
-  return t('@card_type ***@card_number, Expires @card_exp_month/@card_exp_year', $replacements);
+  return t('@card_type ***@card_number, Expires @card_exp_month/@card_exp_year @instance_default', $replacements);
 }
 
 /**
@@ -871,16 +980,21 @@ function _commerce_cardonfile_data_card_replacements($card_data, $prefix = '@') 
     'card_exp_month',
     'card_exp_year',
     'status',
+    'instance_default',
   );
 
   // Load the credit card helper functions from the Payment module.
-  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  commerce_cardonfile_load_credit_card_helpers();
   $card_types = commerce_payment_credit_card_types();
 
   // ensure prefix
   if (empty($prefix) || !in_array($prefix, array('@', '%', '!'))) {
     $prefix = '@';
   }
+
+    $replacements = array(
+      '!default' => !empty($card_data['instance_default']) ? t('(default)') : '',
+    );
 
   // Process card data
   $replacements = array();
@@ -899,6 +1013,10 @@ function _commerce_cardonfile_data_card_replacements($card_data, $prefix = '@') 
           else {
             $value = t('Card');
           }
+          break;
+
+        case 'instance_default':
+          $value = !empty($card_data[$key]) ? t('(default card)') : '';
           break;
 
         default:
@@ -992,7 +1110,6 @@ function commerce_cardonfile_data_load_multiple($uid, $instance_id = NULL, $acti
 
   return commerce_cardonfile_data_load_multiple_by_id(array(), $conditions);
 }
-
 
 /**
  * Loads multiple stored card data similar to entity_load().
@@ -1120,12 +1237,34 @@ function commerce_cardonfile_data_save(&$card_data) {
 
     // Notify other modules that this card data has been inserted.
     module_invoke_all('commerce_cardonfile_data_insert', $card_data);
+
+    // Save for other to access
+    _commerce_cardonfile_data_current_request_last_inserted($card_data);
   }
 
   // ensure that there is only 1 default per instance
   $num_cleared = commerce_cardonfile_data_ensure_single_instance_default($card_data);
 
   return $return;
+}
+
+/**
+ * Store last inserted card data for reference by other functions
+ *
+ * Items are stored as a stack, ie last on top
+ */
+function _commerce_cardonfile_data_current_request_last_inserted($card_data = array()) {
+  $stack = &drupal_static(__FUNCTION__, array());
+  $stack_size = 5;
+
+  if (!empty($card_data) && !empty($card_data['card_id'])) {
+    array_unshift($stack, $card_data);
+    if (count($stack) > $stack_size) {
+      array_pop($stack);
+    }
+  }
+
+  return $stack;
 }
 
 /**
@@ -1182,6 +1321,17 @@ function commerce_cardonfile_data_delete_references($card_data) {
       }
     }
   }
+}
+
+/**
+ * Returns TRUE if the card data has NOT expired
+ */
+function commerce_cardonfile_data_check_expiration($card_data) {
+  if (!isset($card_data['card_exp_month']) || !isset($card_data['card_exp_year'])) {
+    return FALSE;
+  }
+
+  return commerce_cardonfile_check_expiration($card_data['card_exp_month'], $card_data['card_exp_year']);
 }
 
 /**
@@ -1311,6 +1461,17 @@ function commerce_cardonfile_valid_token($token) {
 // Helpers
 
 /**
+ * Loads credit card helper functions in commerce_payment
+ */
+function commerce_cardonfile_load_credit_card_helpers() {
+  static $loaded = FALSE;
+
+  if (!$loaded) {
+    $loaded = module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  }
+}
+
+/**
  * Create a billing addressfield form outside of customer profile
  *
  * @param $form
@@ -1369,13 +1530,21 @@ function commerce_cardonfile_billing_address_form(&$form, &$form_state, $default
   return field_default_form($host_entity_type, $host_entity, $field, $instance, $langcode, $items, $form, $form_state, 0);
 }
 
+/**
+ * Returns TRUE if the card has NOT expired
+ */
+function commerce_cardonfile_check_expiration($month, $year) {
+  commerce_cardonfile_load_credit_card_helpers();
+  $check = commerce_payment_validate_credit_card_exp_date($month, $year);
+  return $check === TRUE;
+}
 
 /**
  * Wrapper to determine card type based on card number
  */
 function _commerce_cardonfile_get_credit_card_type($number) {
   // Determine the new credit card type if possible for use in later code.
-  module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
+  commerce_cardonfile_load_credit_card_helpers();
 
   $card_type = '';
   $valid_types = array_keys(commerce_payment_credit_card_types());
