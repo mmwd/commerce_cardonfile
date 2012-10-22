@@ -185,6 +185,32 @@ function commerce_cardonfile_views_api() {
 }
 
 /**
+ * Implements hook_enable().
+ */
+function commerce_cardonfile_enable() {
+  commerce_cardonfile_configure_order_type();
+}
+
+/**
+ * Implements hook_modules_enabled().
+ * - Ensure order fields for newly enabled modules
+ */
+function commerce_cardonfile_modules_enabled($modules) {
+  $possible_modules = module_implements('entity_info_alter');
+  $enabled_possible_modules = array_intersect($modules, $possible_modules);
+
+  // configure fields if any enabled module could register a new order bundle
+  if (!empty($enabled_possible_modules)) {
+    entity_info_cache_clear();
+    commerce_cardonfile_configure_order_type();
+  }
+}
+
+
+// -----------------------------------------------------------------------
+// Theme
+
+/**
  * Implements hook_theme().
  */
 function commerce_cardonfile_theme() {
@@ -238,6 +264,94 @@ function theme_card_data_overview($variables) {
   }
 
   return '<div class="commerce-card-data">' . $output . '</div>';
+}
+
+// -----------------------------------------------------------------------
+// Field setup
+
+/**
+ * Ensures the card on file field is present on a specific order bundle.
+ *
+ * @param $bundle
+ *  The order bundle to configure.
+ *  If not provided, then all bundles are configured.
+ *
+ */
+function commerce_cardonfile_configure_order_type($bundle = NULL) {
+  $bundles = array();
+  if (!empty($bundle)) {
+    $bundles[] = $bundle;
+  }
+  elseif ($bundle_names = commerce_order_type_get_name()) {
+    $bundles = array_keys($bundle_names);
+  }
+
+  // Exit if no types to configure
+  if (empty($bundles)) {
+    return;
+  }
+
+  // intialize field variables
+  $field_type = 'commerce_cardonfile_reference';
+  $field_name = 'commerce_cardonfile';
+
+  // If a field type we know should exist isn't found, clear the Field cache.
+  if (!field_info_field_types($field_type)) {
+    field_cache_clear();
+  }
+
+  // get field type information for defaults
+  $field_type_info = field_info_field_types($field_type);
+
+  // determine defaults
+  $default_widget = !empty($field_type_info['default_widget']) ? $field_type_info['default_widget'] : 'options_select';
+  $default_formatter = !empty($field_type_info['default_formatter']) ? $field_type_info['default_formatter'] : 'commerce_cardonfile_reference_label_link';
+
+  // Configure the field
+  $field = field_info_field($field_name);
+  if (empty($field)) {
+    $field = array(
+      'field_name' => $field_name,
+      'type' => $field_type,
+      'cardinality' => 1,
+      'entity_types' => array('commerce_order'),
+      'translatable' => FALSE,
+      'locked' => TRUE,
+    );
+    $field = field_create_field($field);
+  }
+
+  // configure field instances for each bundle
+  foreach ($bundles as $bundle) {
+    $instance = field_info_instance('commerce_order', $field_name, $bundle);
+    if (!empty($instance)) {
+      continue;
+    }
+
+    $instance = array(
+      'field_name' => $field_name,
+      'entity_type' => 'commerce_order',
+      'bundle' => $bundle,
+      'label' => t('Card on file'),
+      'settings' => array(),
+      'widget' => array(
+        'type' => $default_widget,
+        'weight' => 10,
+      ),
+      'display' => array(),
+    );
+
+    // Set the default display formatters for various view modes.
+    foreach (array('default', 'customer', 'administrator') as $view_mode) {
+      $instance['display'][$view_mode] = array(
+        'label' => 'above',
+        'type' => $default_formatter,
+        'weight' => 10,
+      );
+    }
+
+    field_create_instance($instance);
+  }
 }
 
 
@@ -800,13 +914,13 @@ function _commerce_cardonfile_data_card_replacements($card_data, $prefix = '@') 
 }
 
 /**
- * Returns an initialized product object.
+ * Returns an initialized card on file data array.
  *
- * @param $type
- *   The machine-readable type of the product.
+ * @param $values
+ *   An array of initial values for the data array.
  *
  * @return
- *   A product object with all default fields initialized.
+ *   A card on file data array.
  */
 function commerce_cardonfile_data_new($values = array()) {
   $data = array();

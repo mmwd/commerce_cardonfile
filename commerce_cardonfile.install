@@ -166,3 +166,16 @@ function commerce_cardonfile_update_7101(&$sandbox) {
 
   return t('Card data table has been updated.');
 }
+
+/**
+ * Create a card on file reference field instance for each order type
+ */
+function commerce_cardonfile_update_7102(&$sandbox) {
+  field_info_cache_clear();
+  drupal_load('module', 'commerce_cardonfile');
+  module_load_include('module', 'commerce_order');
+
+  commerce_cardonfile_configure_order_type();
+
+  return t('Card on file order fields have been created.');
+}
