@@ -6,6 +6,11 @@
  * associating card data reference IDs from payment gateways with user accounts.
  */
 
+// -----------------------------------------------------------------------
+// Includes
+require_once dirname(__FILE__) . '/commerce_cardonfile.field.inc';
+
+
 /**
  * Implements hook_menu().
  */
@@ -294,7 +299,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
           // If we found any stored cards, show the options in the form.
           if (!empty($stored_cards)) {
             $element = variable_get('commerce_cardonfile_selector', 'radios');
-            $options = commerce_cardonfile_options_list($stored_cards, $element);
+            $options = commerce_cardonfile_checkout_options_list($stored_cards, $element);
 
             $form['commerce_payment']['payment_details']['cardonfile'] = array(
               '#type' => $element,
@@ -341,7 +346,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
  * @return
  *   An options array for selecting a card on file.
  */
-function commerce_cardonfile_options_list($stored_cards, $element = 'radios', $different = TRUE) {
+function commerce_cardonfile_checkout_options_list($stored_cards, $element = 'radios', $different = TRUE) {
   // Build an options array of stored credit cards.
   $options = array();
 
@@ -1022,9 +1027,46 @@ function commerce_cardonfile_data_delete($card_id) {
     // Notify other modules that this card data has been deleted.
     module_invoke_all('commerce_cardonfile_data_delete', $card_data);
 
+    // Delete references for card data
+    commerce_cardonfile_data_delete_references($card_data);
+
+    // Delete card data
     db_delete('commerce_card_data')
       ->condition('card_id', $card_id)
       ->execute();
+  }
+}
+
+/**
+ * Deletes any references to the given card data.
+ */
+function commerce_cardonfile_data_delete_references($card_data) {
+  if (empty($card_data['card_id'])) {
+    return;
+  }
+
+  // Check the data in every line item reference field.
+  foreach (commerce_info_fields('commerce_cardonfile_reference') as $field_name => $field) {
+    // Query for any entity referencing the deleted line item in this field.
+    $query = new EntityFieldQuery();
+    $query->fieldCondition($field_name, 'card_id', $card_data['card_id'], '=');
+    $result = $query->execute();
+
+    // If results were returned...
+    if (!empty($result)) {
+      // Loop over results for each type of entity returned.
+      foreach ($result as $entity_type => $data) {
+        // Load the entities of the current type.
+        $entities = entity_load($entity_type, array_keys($data));
+
+        // Loop over each entity and remove the reference to the deleted line item.
+        foreach ($entities as $entity_id => $entity) {
+          commerce_entity_reference_delete($entity, $field_name, 'card_id', $card_data['card_id']);
+
+          entity_save($entity_type, $entity);
+        }
+      }
+    }
   }
 }
 

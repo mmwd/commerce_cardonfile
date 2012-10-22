@@ -8,7 +8,7 @@
 /**
  * Implements hook_field_info().
  */
-function commerce_cardonfile_reference_field_info() {
+function commerce_cardonfile_field_info() {
   return array(
     'commerce_cardonfile_reference' => array(
       'label' => t('Card on file reference'),
@@ -31,7 +31,7 @@ function commerce_cardonfile_reference_field_info() {
 /**
  * Implements hook_field_instance_settings_form().
  */
-function commerce_cardonfile_reference_field_instance_settings_form($field, $instance) {
+function commerce_cardonfile_field_instance_settings_form($field, $instance) {
   $settings = $instance['settings'];
   $settings += field_info_instance_settings($field['type']);
 
@@ -42,7 +42,6 @@ function commerce_cardonfile_reference_field_instance_settings_form($field, $ins
     '#title' => t('Only active cards.'),
     '#description' => t('If enabled, only active cards will be allowed.'),
     '#default_value' => $settings['only_active_cards'],
-    //'#weight' => -5,
   );
 
   $form['include_disabled_payment_instances'] = array(
@@ -50,7 +49,6 @@ function commerce_cardonfile_reference_field_instance_settings_form($field, $ins
     '#title' => t('Allow disabled payment method instances.'),
     '#description' => t('If enabled, cards associated with a disabled payment method instance will be allowed.'),
     '#default_value' => $settings['include_disabled_payment_instances'],
-    //'#weight' => -4,
   );
 
   // Build an options array of the payment method instances.
@@ -89,7 +87,7 @@ function commerce_cardonfile_reference_field_instance_settings_form($field, $ins
  * - 'invalid_card_id': card_id is not valid for the field (not a valid
  *                         card id, or the card is not referenceable).
  */
-function commerce_cardonfile_reference_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+function commerce_cardonfile_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
   // Extract card_ids to check.
   $card_ids = array();
 
@@ -129,7 +127,7 @@ function commerce_cardonfile_reference_field_validate($entity_type, $entity, $fi
 /**
  * Implements hook_field_is_empty().
  */
-function commerce_cardonfile_reference_field_is_empty($item, $field) {
+function commerce_cardonfile_field_is_empty($item, $field) {
   // card_id = 0 is empty too, which is exactly what we want.
   return empty($item['card_id']);
 }
@@ -137,7 +135,7 @@ function commerce_cardonfile_reference_field_is_empty($item, $field) {
 /**
  * Implements hook_field_formatter_info().
  */
-function commerce_cardonfile_reference_field_formatter_info() {
+function commerce_cardonfile_field_formatter_info() {
   return array(
     'commerce_cardonfile_reference_label_link' => array(
       'label' => t('Label (link)'),
@@ -160,7 +158,7 @@ function commerce_cardonfile_reference_field_formatter_info() {
 /**
  * Implements hook_field_formatter_view().
  */
-function commerce_cardonfile_reference_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+function commerce_cardonfile_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $result = array();
 
   // Collect the list of card IDs.
@@ -226,7 +224,7 @@ function commerce_cardonfile_reference_field_formatter_view($entity_type, $entit
  * Defines widgets available for use with field types as specified in each
  * widget's $info['field types'] array.
  */
-function commerce_cardonfile_reference_field_widget_info() {
+function commerce_cardonfile_field_widget_info() {
   $widgets = array();
 
   // Do not show the widget on forms; useful in cases where reference fields
@@ -246,7 +244,7 @@ function commerce_cardonfile_reference_field_widget_info() {
 /**
  * Implements hook_field_widget_info_alter().
  */
-function commerce_cardonfile_reference_field_widget_info_alter(&$info) {
+function commerce_cardonfile_field_widget_info_alter(&$info) {
   $info['options_select']['field types'][] = 'commerce_cardonfile_reference';
   $info['options_buttons']['field types'][] = 'commerce_cardonfile_reference';
 }
@@ -254,7 +252,7 @@ function commerce_cardonfile_reference_field_widget_info_alter(&$info) {
 /**
  * Implements hook_field_widget_settings_form().
  */
-function commerce_cardonfile_reference_field_widget_settings_form($field, $instance) {
+function commerce_cardonfile_field_widget_settings_form($field, $instance) {
   $widget = $instance['widget'];
   $defaults = field_info_widget_settings($widget['type']);
   $settings = array_merge($defaults, $widget['settings']);
@@ -269,7 +267,7 @@ function commerce_cardonfile_reference_field_widget_settings_form($field, $insta
  *
  * Used to define the form element for custom widgets.
  */
-function commerce_cardonfile_reference_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+function commerce_cardonfile_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
   // Hide the widget
   if ($instance['widget']['type'] == 'commerce_cardonfile_reference_hidden') {
     return array();
@@ -279,15 +277,19 @@ function commerce_cardonfile_reference_field_widget_form(&$form, &$form_state, $
 /**
  * Implements hook_field_widget_error().
  */
-function commerce_cardonfile_reference_field_widget_error($element, $error) {
+function commerce_cardonfile_field_widget_error($element, $error) {
   form_error($element, $error['message']);
 }
 
 /**
  * Implements hook_options_list().
  */
-function commerce_cardonfile_reference_options_list($field, $instance, $entity_type, $entity) {
+function commerce_cardonfile_options_list($field, $instance, $entity_type, $entity) {
   $options = array();
+  if ($field['type'] != 'commerce_cardonfile_reference') {
+    return array();
+  }
+
   $settings = !empty($instance['settings']) ? $instance['settings'] : array();
   $settings += field_info_instance_settings($field['type']);
 
@@ -343,13 +345,16 @@ function commerce_cardonfile_reference_options_list($field, $instance, $entity_t
     // Add them to the options list in optgroups by payment instance id.
     $payment_instance_id = check_plain($card_data['instance_id']);
     $label = $card_id;
+    $replacements = array(
+      '!default' => !empty($card_data['instance_default']) ? t('(user\'s default)') : '',
+    );
     if (!empty($instance['widget']['type']) && $instance['widget']['type'] == 'options_select') {
-      $replacements = _commerce_cardonfile_data_card_replacements($card_data, '!');
-      $label = t('!card_type ***!card_number, Expires !card_exp_month/!card_exp_year', $replacements);
+      $replacements += _commerce_cardonfile_data_card_replacements($card_data, '!');
+      $label = t('!card_type ***!card_number, Expires !card_exp_month/!card_exp_year !default', $replacements);
     }
     else {
-      $replacements = _commerce_cardonfile_data_card_replacements($card_data, '@');
-      $label = t('@card_type ***@card_number, Expires @card_exp_month/@card_exp_year', $replacements);
+      $replacements += _commerce_cardonfile_data_card_replacements($card_data, '@');
+      $label = t('@card_type ***@card_number, Expires @card_exp_month/@card_exp_year !default', $replacements);
     }
 
     $options[$payment_instance_id][$card_id] = $label;
@@ -366,7 +371,7 @@ function commerce_cardonfile_reference_options_list($field, $instance, $entity_t
 /**
  * Callback to alter the property info of the reference fields.
  *
- * @see ccommerce_cardonfile_reference_field_info().
+ * @see commerce_cardonfile_field_info().
  */
 function commerce_cardonfile_reference_property_info_callback(&$info, $entity_type, $field, $instance, $field_type) {
   $property = &$info[$entity_type]['bundles'][$instance['bundle']]['properties'][$field['field_name']];
@@ -376,7 +381,7 @@ function commerce_cardonfile_reference_property_info_callback(&$info, $entity_ty
 /**
  * Implements hook_field_access().
  */
-function commerce_cardonfile_reference_field_access($op, $field, $entity_type, $entity, $account) {
+function commerce_cardonfile_field_access($op, $field, $entity_type, $entity, $account) {
   if ($field['type'] != 'commerce_cardonfile_reference' || empty($field['field_name']) || empty($entity)) {
     return;
   }
@@ -405,4 +410,39 @@ function commerce_cardonfile_reference_field_access($op, $field, $entity_type, $
       }
     }
   }
+}
+
+/**
+ * Implements hook_field_views_data().
+ */
+function commerce_cardonfile_field_views_data($field) {
+  if ($field['type'] != 'commerce_cardonfile_reference') {
+    return;
+  }
+
+  $data = field_views_field_default_views_data($field);
+
+  // Build an array of bundles the field appears on.
+  $bundles = array();
+
+  foreach ($field['bundles'] as $entity => $entity_bundles) {
+    $bundles[] = $entity . ' (' . implode(', ', $entity_bundles) . ')';
+  }
+
+  foreach ($data as $table_name => $table_data) {
+    foreach ($table_data as $field_name => $field_data) {
+      if (isset($field_data['filter']['field_name']) && $field_name != 'delta') {
+        $data[$table_name][$field_name]['relationship'] = array(
+          'title' => t('Referenced card on file'),
+          'help' => t('Appears in: @bundles.', array('@bundles' => implode(', ', $bundles))),
+          'base' => 'commerce_card_data',
+          'base field' => 'card_id',
+          'handler' => 'views_handler_relationship',
+          'label' => t('Card on File'),
+        );
+      }
+    }
+  }
+
+  return $data;
 }

@@ -125,6 +125,32 @@ function commerce_cardonfile_schema() {
 }
 
 /**
+ * Implements hook_field_schema().
+ */
+function commerce_cardonfile_field_schema($field) {
+  if ($field['type'] == 'commerce_cardonfile_reference') {
+    return array(
+      'columns' => array(
+        'card_id' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ),
+      ),
+      'indexes' => array(
+        'card_id' => array('card_id'),
+      ),
+      'foreign keys' => array(
+        'card_id' => array(
+          'table' => 'commerce_card_data',
+          'columns' => array('card_id' => 'card_id'),
+        ),
+      ),
+    );
+  }
+}
+
+/**
  * Add the instance_default column to card data table
  */
 function commerce_cardonfile_update_7101(&$sandbox) {
