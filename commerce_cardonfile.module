@@ -774,7 +774,7 @@ function _commerce_cardonfile_payment_method_instances($method_id, $include_disa
  */
 function commerce_cardonfile_data_statuses() {
   $statuses = array(
-    0 => t('Inactive'),
+    0 => t('Disabled'),
     1 => t('Active'),
     2 => t('Not deletable'),
   );
@@ -817,6 +817,148 @@ function commerce_cardonfile_data_status_get_title($name = NULL) {
  */
 function commerce_cardonfile_data_status_options_list() {
   return commerce_cardonfile_data_status_get_title();
+}
+
+/**
+ * Define property info for line item Kiala Point records
+ */
+function commerce_cardonfile_data_property_info_callback() {
+  return array(
+    'card_id' => array(
+      'label' => t('Card Data Unique ID'),
+      'type' => 'integer',
+    ),
+    'uid' => array(
+      'label' => t('Owner User ID'),
+      'type' => 'integer',
+    ),
+    'owner' => array(
+      'label' => t('Owner'),
+      'type' => 'user',
+      'description' => t('The card owner user object.'),
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
+    'payment_method' => array(
+      'label' => t('Payment Method ID'),
+      'type' => 'text',
+    ),
+    'instance_id' => array(
+      'label' => t('Payment Method Instance ID'),
+      'type' => 'text',
+      'description' => t('The instance id for the payment method instance rules configuration.'),
+    ),
+    'payment_method_instance' => array(
+      'label' => t('Payment Method Instance'),
+      'type' => 'struct',
+      'description' => t('The loaded payment method instance info array.'),
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
+    'rule_name' => array(
+      'label' => t('Payment Method Instance Rule Name'),
+      'type' => 'text',
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
+    'rule_config' => array(
+      'label' => t('Payment Method Instance Rule Config'),
+      'type' => 'rules_config',
+      'description' => t('The rules config object of the payment method instance.'),
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
+    'remote_id' => array(
+      'label' => t('Remote ID'),
+      'type' => 'text',
+    ),
+    'card_type' => array(
+      'label' => t('Card Type'),
+      'type' => 'text',
+    ),
+    'card_name' => array(
+      'label' => t('Name on the Card'),
+      'type' => 'text',
+    ),
+    'card_exp_month' => array(
+      'label' => t('Card Expiration Month'),
+      'type' => 'integer',
+    ),
+    'card_exp_year' => array(
+      'label' => t('Card Expiration Year'),
+      'type' => 'integer',
+    ),
+    'card_expired' => array(
+      'label' => t('Card Expired'),
+      'type' => 'boolean',
+      'description' => t('TRUE if the card has expired.'),
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
+    'status' => array(
+      'label' => t('Status'),
+      'type' => 'integer',
+      'options list' => 'commerce_cardonfile_data_statuses',
+    ),
+    'can_charge' => array(
+      'label' => t('Can Charge'),
+      'type' => 'boolean',
+      'description' => t('TRUE if the card can be charged.'),
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
+    'created' => array(
+      'label' => t('Created Date'),
+      'type' => 'date',
+    ),
+    'changed' => array(
+      'label' => t('Changed Date'),
+      'type' => 'date',
+    ),
+    'instance_default' => array(
+      'label' => t('Instance Default'),
+      'type' => 'boolean',
+      'description' => t('TRUE if the card has been marked as the default for the payment method instance.'),
+    ),
+  );
+}
+
+/**
+ * Card data properties getter callback
+ */
+function commerce_cardonfile_data_property_get($data, array $options, $name) {
+  switch ($name) {
+    case 'owner':
+      return !empty($data['uid']) ? $data['uid'] : NULL;
+
+    case 'payment_method_instance':
+      if (!empty($data['instance_id'])) {
+        return commerce_payment_method_instance_load($data['instance_id']);
+      }
+      break;
+
+    case 'rule_name':
+    case 'rule_config':
+      if (empty($data['instance_id'])) {
+        return;
+      }
+      $payment_method = commerce_payment_method_instance_load($data['instance_id']);
+      if (empty($payment_method)) {
+        return;
+      }
+
+      // Explode the method key into its component parts.
+      list($method_id, $rule_name) = explode('|', $payment_method['instance_id']);
+
+      // Return name only since config will auto load
+      return $rule_name ? $rule_name : NULL;
+
+    case 'card_expired':
+      return !commerce_cardonfile_data_check_expiration($data);
+
+    case 'can_charge':
+      return commerce_cardonfile_data_can_charge($data);
+  }
 }
 
 /**
@@ -1336,6 +1478,13 @@ function commerce_cardonfile_data_check_expiration($card_data) {
 }
 
 /**
+ * Returns TRUE if the card can be charged
+ */
+function commerce_cardonfile_data_can_charge($card_data) {
+  return !empty($card_data['status']) && commerce_cardonfile_data_check_expiration($card_data);
+}
+
+/**
  * Toggle the card data's default flag
  */
 function commerce_cardonfile_data_toggle_default_card($card_data) {
@@ -1437,6 +1586,49 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
     ->execute();
 
   return $num_updated;
+}
+
+
+// -----------------------------------------------------------------------
+// Order handling
+
+/**
+ * Order properties getter callback
+ */
+function commerce_cardonfile_order_property_get($entity, array $options, $name) {
+  switch ($name) {
+    case 'chargeable_cardonfile':
+      if (empty($entity->uid)) {
+        return;
+      }
+
+      // wrap the order
+      $entity_wrapper = entity_metadata_wrapper('commerce_order', $entity);
+
+      // Check card reference field
+      if (isset($entity_wrapper->commerce_cardonfile)) {
+        $order_card_id = $entity_wrapper->commerce_cardonfile->value();
+        if (!empty($order_card_id)) {
+          $order_card_data = commerce_cardonfile_data_load($order_card_id);
+          if (commerce_cardonfile_data_can_charge($order_card_data)) {
+            return $order_card_data;
+          }
+        }
+      }
+
+      // Check default card for payment instance
+      if (!empty($entity->data['payment_method'])) {
+        $default_card_id = commerce_cardonfile_data_load_user_default_cards($entity->uid, $entity->data['payment_method']);
+        if (!empty($default_card_id)) {
+          $default_card_data = commerce_cardonfile_data_load($default_card_id);
+          if (commerce_cardonfile_data_can_charge($default_card_data)) {
+            return $default_card_data;
+          }
+        }
+      }
+
+      break;
+  }
 }
 
 
