@@ -185,12 +185,14 @@ function commerce_cardonfile_field_formatter_view($entity_type, $entity, $field,
           $card = $cards[$item['card_id']];
 
           if ($display['type'] == 'commerce_cardonfile_reference_label_link' &&
+              !empty($card['status']) &&
               commerce_cardonfile_data_access('edit', $card)) {
             $label = theme('commerce_cardonfile_data_label', array('card_data' => $card));
             $result[$delta] = array(
               '#type' => 'link',
               '#title' => $label,
               '#href' => 'user/' . $card['uid'] . '/stored-payment-methods/' . $card['card_id'] . '/update',
+              '#options' => array('html' => TRUE),
             );
           }
           else {

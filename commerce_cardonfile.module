@@ -252,6 +252,7 @@ function theme_card_data_overview($variables) {
     t('Cardholder name:') => check_plain($card_data['card_name']),
     t('Number (last 4):') => '******' . check_plain($card_data['card_number']),
     t('Expiration date:') => check_plain($card_data['card_exp_month'] . '/' . $card_data['card_exp_year']),
+    t('Stored status:') => !empty($card_data['status']) ? t('Active') : t('Disabled'),
   );
 
   $output = '';
