@@ -341,13 +341,24 @@ function commerce_cardonfile_delete_form($form, &$form_state, $card_data) {
     '#value' => $card_data,
   );
 
-  return confirm_form(
-    $form,
-    t('Are you sure you want to delete this card data?'),
-    'user/' . $card_data['uid'] . '/stored-payment-methods',
-    theme('card_data_overview', array('card_data' => $card_data)),
-    t('Delete')
-  );
+  if (commerce_cardonfile_data_can_delete($card_data)) {
+    $form = confirm_form(
+      $form,
+      t('Are you sure you want to delete this card?'),
+      'user/' . $card_data['uid'] . '/stored-payment-methods',
+      theme('card_data_overview', array('card_data' => $card_data)) .
+      '<div class="messages warning">' . t('Deleting this card cannot be undone.') . '</div>',
+      t('Delete')
+    );
+  }
+  else {
+    $form['card_no_delete'] = array(
+      '#markup' => theme('card_data_overview', array('card_data' => $card_data)) .
+      '<div class="messages warning">' . t('This card cannot be deleted or disabled.') . '</div>',
+    );
+  }
+
+  return $form;
 }
 
 /**
@@ -356,25 +367,30 @@ function commerce_cardonfile_delete_form($form, &$form_state, $card_data) {
 function commerce_cardonfile_delete_form_submit($form, &$form_state) {
   $card_data = $form_state['values']['card_data'];
 
-  // Invoke the payment method's card delete callback.
-  if (!empty($card_data['instance_id'])) {
-    $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
-    $delete_callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
-    $callback_return = $delete_callback($form, $form_state, $payment_method, $card_data);
-    if (!$callback_return) {
-      // Display a message if we failed to communicate properly with the payment
-      // gateway in the Card on File delete callback.
-      drupal_set_message(t('We encountered an error attempting to delete your card data. Please try again and contact us if this error persists.'), 'error');
-      $form_state['redirect'] = 'user/' . $card_data['uid'] . '/stored-payment-methods';
-      return;
+  if (commerce_cardonfile_data_can_delete($card_data)) {
+    // Invoke the payment method's card delete callback.
+    if (!empty($card_data['instance_id'])) {
+      $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+      $delete_callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
+      $callback_return = $delete_callback($form, $form_state, $payment_method, $card_data);
+      if (!$callback_return) {
+        // Display a message if we failed to communicate properly with the payment
+        // gateway in the Card on File delete callback.
+        drupal_set_message(t('We encountered an error attempting to delete your card data. Please try again and contact us if this error persists.'), 'error');
+        $form_state['redirect'] = 'user/' . $card_data['uid'] . '/stored-payment-methods';
+        return;
+      }
     }
+
+    // Disable the card data but retain the record.
+    $card_data['status'] = 0;
+    commerce_cardonfile_data_save($card_data);
+
+    drupal_set_message(t('The stored card data has been deleted.'));
   }
-
-  // Disable the card data but retain the record.
-  $card_data['status'] = 0;
-  commerce_cardonfile_data_save($card_data);
-
-  drupal_set_message(t('The stored card data has been deleted.'));
+  else {
+    drupal_set_message(t('This card cannot be deleted or disabled.'), 'warning');
+  }
 
   // Redirect to the payment methods tab if the user has other stored payment.
   $stored_cards = commerce_cardonfile_data_load_multiple($card_data['uid']);

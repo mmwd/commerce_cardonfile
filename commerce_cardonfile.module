@@ -169,6 +169,7 @@ function commerce_cardonfile_hook_info() {
     'commerce_cardonfile_data_insert' => $base_info,
     'commerce_cardonfile_data_update' => $base_info,
     'commerce_cardonfile_data_delete' => $base_info,
+    'commerce_cardonfile_data_can_delete' => $base_info,
   );
 
   return $hooks;
@@ -1359,6 +1360,12 @@ function commerce_cardonfile_data_save(&$card_data) {
     // Merge original to pass to hooks
     $card_data += $card_data_original;
 
+    // Check if can disable the card
+    if (empty($card_data['status']) && !empty($card_data_original['status']) &&
+        !commerce_cardonfile_data_can_delete($card_data)) {
+      return FALSE;
+    }
+
     // Notify other modules that this card data has been updated.
     module_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
   }
@@ -1411,7 +1418,38 @@ function _commerce_cardonfile_data_current_request_last_inserted($card_data = ar
 }
 
 /**
- * Deletes stored card data by local ID.
+ * Determines whether or not the give card can be deleted.
+ *
+ * @param $card_data
+ *   The card data array to be checked for deletion.
+ *
+ * @return
+ *   Boolean indicating whether or not the card can be deleted.
+ */
+function commerce_cardonfile_data_can_delete($card_data) {
+  // Return FALSE if the given card does not have an ID; it need not be
+  // deleted, which is functionally equivalent to cannot be deleted as far as
+  // code depending on this function is concerned.
+  if (empty($card_data['card_id'])) {
+    return FALSE;
+  }
+
+  // If any module implementing commerce_cardonfile_data_can_delete() returns
+  // FALSE the card cannot be deleted. Return TRUE if none return FALSE.
+  foreach (module_implements('commerce_cardonfile_data_can_delete') as $module) {
+    $function = $module . '_commerce_cardonfile_data_can_delete';
+    $result = $function($card_data);
+    if ($result === FALSE) {
+      return FALSE;
+    }
+  }
+
+  // Allow by default
+  return TRUE;
+}
+
+/**
+ * Deletes stored card data record by local ID.
  *
  * @param $card_id
  *   The local ID of the card data to delete.
@@ -1419,7 +1457,7 @@ function _commerce_cardonfile_data_current_request_last_inserted($card_data = ar
 function commerce_cardonfile_data_delete($card_id) {
   $card_data = commerce_cardonfile_data_load($card_id);
 
-  if (!empty($card_data)) {
+  if (!empty($card_data) && commerce_cardonfile_data_can_delete($card_data)) {
     // Notify other modules that this card data has been deleted.
     module_invoke_all('commerce_cardonfile_data_delete', $card_data);
 
