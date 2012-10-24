@@ -1754,35 +1754,62 @@ function commerce_cardonfile_order_property_get($entity, array $options, $name) 
         return;
       }
 
-      // wrap the order
-      $entity_wrapper = entity_metadata_wrapper('commerce_order', $entity);
-
-      // Build possible cards
-      $possible_card_ids = module_invoke_all('commerce_cardonfile_order_chargeable_cards', $entity);
-      drupal_alter('commerce_cardonfile_order_chargeable_cards', $possible_card_ids);
-
-      // Exit if no possible cards
-      if (empty($possible_card_ids)) {
-        return;
-      }
-
-      // Load card data
-      $possible_cards = commerce_cardonfile_data_load_multiple_by_id($possible_card_ids);
-
-      // Exit if cards invalid
-      if (empty($possible_cards)) {
-        return;
-      }
-
-      // Process cards to ensure capable of charging
-      // - First card to pass checks wins
-      foreach ($possible_cards as $card_data) {
-        if (commerce_cardonfile_data_can_charge($card_data)) {
-          return $card_data;
-        }
-      }
+      $cards = _commerce_cardonfile_order_chargeable_cards($entity);
+      return !empty($cards) ? reset($cards) : NULL;
       break;
   }
+}
+
+/**
+ * Returns the chargeable cards for the given order that are returned from
+ * hook_commerce_cardonfile_order_chargeable_cards().
+ *
+ * @param $order
+ *  An order object
+ *
+ * @return
+ *   An associative array of card data keyed by card_id or
+ *   an empty array if no cards are found
+ */
+function _commerce_cardonfile_order_chargeable_cards($order) {
+  if (empty($order->uid)) {
+    return array();
+  }
+
+  // Build possible cards
+  $possible_card_ids = module_invoke_all('commerce_cardonfile_order_chargeable_cards', $order);
+  drupal_alter('commerce_cardonfile_order_chargeable_cards', $possible_card_ids);
+
+  // Exit if no possible cards
+  if (empty($possible_card_ids)) {
+    return array();
+  }
+
+  // Load card data
+  $possible_cards = commerce_cardonfile_data_load_multiple_by_id($possible_card_ids);
+
+  // Exit if cards invalid
+  if (empty($possible_cards)) {
+    return array();
+  }
+
+  // Process cards to ensure capable of charging
+  // - First card to pass checks wins
+  foreach (array_keys($possible_cards) as $card_id) {
+    if (!commerce_cardonfile_data_can_charge($possible_cards[$card_id])) {
+      unset($possible_cards[$card_id]);
+    }
+  }
+
+  // Sort per the returned hook card ids
+  $return = array();
+  foreach ($possible_card_ids as $card_id) {
+    if (isset($possible_cards[$card_id])) {
+      $return[$card_id] = $possible_cards[$card_id];
+    }
+  }
+
+  return $return;
 }
 
 /**
