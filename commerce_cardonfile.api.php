@@ -101,10 +101,12 @@ function hook_commerce_cardonfile_order_chargeable_cards($order) {
   }
 
   // Default card for payment instance
-  $default_cards = commerce_cardonfile_data_load_user_default_cards($order->uid, $order->data['payment_method']);
-  if (!empty($default_cards)) {
-    $possible_cards = array_merge($possible_cards, array_keys($default_cards));
-    $possible_cards = array_unique($possible_cards);
+  if (!empty($order->data['payment_method'])) {
+    $default_cards = commerce_cardonfile_data_load_user_default_cards($order->uid, $order->data['payment_method']);
+    if (!empty($default_cards)) {
+      $possible_cards = array_merge($possible_cards, array_keys($default_cards));
+      $possible_cards = array_unique($possible_cards);
+    }
   }
 
   return $possible_cards;
