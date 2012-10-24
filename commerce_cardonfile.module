@@ -170,6 +170,7 @@ function commerce_cardonfile_hook_info() {
     'commerce_cardonfile_data_update' => $base_info,
     'commerce_cardonfile_data_delete' => $base_info,
     'commerce_cardonfile_data_can_delete' => $base_info,
+    'commerce_cardonfile_order_chargeable_cards' => $base_info,
   );
 
   return $hooks;
@@ -1519,7 +1520,32 @@ function commerce_cardonfile_data_check_expiration($card_data) {
  * Returns TRUE if the card can be charged
  */
 function commerce_cardonfile_data_can_charge($card_data) {
-  return !empty($card_data['status']) && commerce_cardonfile_data_check_expiration($card_data);
+  // DENY if card is disabled
+  if (empty($card_data['status'])) {
+    return FALSE;
+  }
+
+  // DENY if there is no payment method instance
+  if (empty($card_data['instance_id'])) {
+    return FALSE;
+  }
+
+  // DENY if card is expired
+  if (!commerce_cardonfile_data_check_expiration($card_data)) {
+    return FALSE;
+  }
+
+  // load payment method related to the card
+  $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+
+  // DENY if not a valid payment method
+  if (empty($payment_method)) {
+    return FALSE;
+  }
+
+  // ALLOW/DENY based on payment method capabilities
+  $callback = commerce_cardonfile_payment_method_callback($payment_method, 'process callback');
+  return $callback ? TRUE : FALSE;
 }
 
 /**
@@ -1636,37 +1662,69 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
 function commerce_cardonfile_order_property_get($entity, array $options, $name) {
   switch ($name) {
     case 'chargeable_cardonfile':
-      if (empty($entity->uid)) {
+      // Exit if no order owner or payment method associated with the order
+      if (empty($entity->uid) || empty($entity->data['payment_method'])) {
         return;
       }
 
       // wrap the order
       $entity_wrapper = entity_metadata_wrapper('commerce_order', $entity);
 
-      // Check card reference field
-      if (isset($entity_wrapper->commerce_cardonfile)) {
-        $order_card_id = $entity_wrapper->commerce_cardonfile->value();
-        if (!empty($order_card_id)) {
-          $order_card_data = commerce_cardonfile_data_load($order_card_id);
-          if (commerce_cardonfile_data_can_charge($order_card_data)) {
-            return $order_card_data;
-          }
-        }
+
+      // Build possible cards
+      $possible_card_ids = module_invoke_all('commerce_cardonfile_order_chargeable_cards', $entity);
+      drupal_alter('commerce_cardonfile_order_chargeable_cards', $possible_card_ids);
+
+      // Exit if no possible cards
+      if (empty($possible_card_ids)) {
+        return;
       }
 
-      // Check default card for payment instance
-      if (!empty($entity->data['payment_method'])) {
-        $default_card_id = commerce_cardonfile_data_load_user_default_cards($entity->uid, $entity->data['payment_method']);
-        if (!empty($default_card_id)) {
-          $default_card_data = commerce_cardonfile_data_load($default_card_id);
-          if (commerce_cardonfile_data_can_charge($default_card_data)) {
-            return $default_card_data;
-          }
-        }
+      // Load card data
+      $possible_cards = commerce_cardonfile_data_load_multiple_by_id($possible_card_ids);
+
+      // Exit if cards invalid
+      if (empty($possible_cards)) {
+        return;
       }
 
+      // Process cards to ensure capable of charging
+      // - First card to pass checks wins
+      foreach ($possible_cards as $card_data) {
+        if (commerce_cardonfile_data_can_charge($card_data) &&
+            $card_data['instance_id'] == $entity->data['payment_method']) {
+          return $card_data;
+        }
+      }
       break;
   }
+}
+
+/**
+ * Implements hook_commerce_cardonfile_order_chargeable_cards()
+ */
+function commerce_cardonfile_commerce_cardonfile_order_chargeable_cards($order) {
+  $possible_cards = array();
+
+  // wrap the order
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+
+  // Order card reference field
+  if (isset($order_wrapper->commerce_cardonfile)) {
+    $order_card_id = $order_wrapper->commerce_cardonfile->value();
+    if (!empty($order_card_id)) {
+      $possible_cards[] = $order_card_id;
+    }
+  }
+
+  // Default card for payment instance
+  $default_cards = commerce_cardonfile_data_load_user_default_cards($order->uid, $order->data['payment_method']);
+  if (!empty($default_cards)) {
+    $possible_cards = array_merge($possible_cards, array_keys($default_cards));
+    $possible_cards = array_unique($possible_cards);
+  }
+
+  return $possible_cards;
 }
 
 

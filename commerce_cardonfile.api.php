@@ -71,3 +71,41 @@ function hook_commerce_cardonfile_data_can_delete($card_data) {
     return $query->execute() > 0 ? FALSE : TRUE;
   }
 }
+
+/**
+ * Lets modules define the chargeable cards associated with an order
+ *
+ * The first chargeable card that passes the capability checks will be returned
+ * as the order's chargeable_cardonfile entity property.  This property can
+ * be used for recurring payments.
+ *
+ * @param $order
+ *   The qualified order object. The order is ensured that it has an owner user
+ *   account and to have a payment method instance id associated with it.
+ *
+ * @return
+ *   An array of card_ids for cards on file
+ */
+function hook_commerce_cardonfile_order_chargeable_cards($order) {
+  $possible_cards = array();
+
+  // wrap the order
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+
+  // Order card reference field
+  if (isset($order_wrapper->commerce_cardonfile)) {
+    $order_card_id = $order_wrapper->commerce_cardonfile->value();
+    if (!empty($order_card_id)) {
+      $possible_cards[] = $order_card_id;
+    }
+  }
+
+  // Default card for payment instance
+  $default_cards = commerce_cardonfile_data_load_user_default_cards($order->uid, $order->data['payment_method']);
+  if (!empty($default_cards)) {
+    $possible_cards = array_merge($possible_cards, array_keys($default_cards));
+    $possible_cards = array_unique($possible_cards);
+  }
+
+  return $possible_cards;
+}
