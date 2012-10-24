@@ -1672,6 +1672,78 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
 // Order handling
 
 /**
+ * Process a charge for a given an order
+ *
+ * @param $order
+ *   An order object
+ * @param $charge
+ *   Charge array of amount, currency_code
+ * @param $card_data
+ *   The card data array. If not provided, then the chargeable card for the
+ *   order will be determined.
+ *
+ * @return
+ *  TRUE if the order was processed successfully
+ */
+function commerce_cardonfile_order_process_card($order, $charge = array(), $card_data = array()) {
+  // Exit if no user associated with the order
+  if (empty($order->uid)) {
+    return FALSE;
+  }
+
+  // Wrap up the order
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+
+  // determine charge amount
+  // set charge to order balance if none provided
+  if (empty($charge)) {
+    $charge = commerce_payment_order_balance($order);
+  }
+
+  // exit if no charge
+  if (empty($charge) || empty($charge['amount']) || empty($charge['currency_code'])) {
+    return FALSE;
+  }
+
+  // Determine order's chargeable card
+  if (empty($card_data)) {
+    if (!isset($order_wrapper->chargeable_cardonfile)) {
+      return FALSE;
+    }
+
+    // card data returned is checked for "can charge"
+    $card_data = $order_wrapper->chargeable_cardonfile->value();
+  }
+  elseif (!commerce_cardonfile_data_can_charge($card_data)) {
+    return FALSE;
+  }
+
+  // Exit if not a qualified card
+  if (empty($card_data) || empty($card_data['card_id']) || empty($card_data['instance_id'])) {
+    return FALSE;
+  }
+
+  // load payment method
+  $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
+  if (empty($payment_method)) {
+    return FALSE;
+  }
+
+  // determine payment method's callback function
+  $func = commerce_cardonfile_payment_method_callback($payment_method, 'process callback');
+
+  // Exit if no callback - sanity check since it should have this if "can charge"
+  if (empty($func)) {
+    return FALSE;
+  }
+
+  // invoke callback function
+  $return = $func($card_data, $order, $charge);
+
+  return $return;
+}
+
+/**
  * Order properties getter callback
  */
 function commerce_cardonfile_order_property_get($entity, array $options, $name) {
