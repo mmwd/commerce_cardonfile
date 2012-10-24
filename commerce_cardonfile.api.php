@@ -80,8 +80,8 @@ function hook_commerce_cardonfile_data_can_delete($card_data) {
  * be used for recurring payments.
  *
  * @param $order
- *   The qualified order object. The order is ensured that it has an owner user
- *   account and to have a payment method instance id associated with it.
+ *   The qualified order object. The order is ensured to have an owner user
+ *   account.
  *
  * @return
  *   An array of card_ids for cards on file

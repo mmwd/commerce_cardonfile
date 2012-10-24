@@ -295,34 +295,59 @@ function commerce_cardonfile_options_list($field, $instance, $entity_type, $enti
   $settings = !empty($instance['settings']) ? $instance['settings'] : array();
   $settings += field_info_instance_settings($field['type']);
 
-  // resolve owner
+  // Exit if cannot resolve owner
   if (empty($entity->uid)) {
     return array();
   }
 
+  // load all capable instances
+  $capable_payment_instances = _commerce_cardonfile_capable_payment_method_instances(!empty($settings['include_disabled_payment_instances']));
+
+  // Exit if no capable payment instances found
+  if (empty($capable_payment_instances)) {
+    return;
+  }
+
   // build options based on payment method instances
   $payment_instance_ids = array();
-  if ($entity_type == 'commerce_order' && !empty($entity->data['payment_method'])) {
-    // set to only payment method instance associated with the order
+
+  // If order, extract instance id if possible
+  if ($entity_type == 'commerce_order' && !empty($entity)) {
+    if (!empty($entity->data['payment_method'])) {
+      // set to the payment method instance associated with the order
 /** @todo should the options be restricted based on the order payment method ? ******/
-    $payment_instance_ids[] = $entity->data['payment_method'];
-  }
-  else {
-    // set to all instances
-    $payment_instances = _commerce_cardonfile_capable_payment_method_instances(!empty($settings['include_disabled_payment_instances']));
-    if (!empty($payment_instances)) {
-      $payment_instance_ids = array_keys($payment_instances);
+      $payment_instance_ids[] = $entity->data['payment_method'];
+    }
+    elseif (!empty($field['field_name'])) {
+      // Find card reference saved on the order
+      $entity_wrapper = entity_metadata_wrapper('commerce_order', $entity);
+
+      // Order card reference field
+      if (isset($entity_wrapper->{$field['field_name']})) {
+        $order_card_id = $entity_wrapper->{$field['field_name']}->value();
+        if (!empty($order_card_id)) {
+          $order_card_data = commerce_cardonfile_data_load($order_card_id);
+          if (!empty($order_card_data['instance_id'])) {
+            $payment_instance_ids[] = $order_card_data['instance_id'];
+          }
+        }
+      }
     }
   }
 
-  // exit if no payment instances
+  // Filter found instances by capable instances
+  if (!empty($payment_instance_ids)) {
+    $payment_instance_ids = array_intersect($payment_instance_ids, array_keys($capable_payment_instances));
+  }
+
+  // If none found, set to all capable payment instances
   if (empty($payment_instance_ids)) {
-    return array();
+    $payment_instance_ids = array_keys($capable_payment_instances);
   }
 
   // filter payment instances by referenceable instances
   if (!empty($settings['referenceable_payment_instances'])) {
-    $payment_instance_ids = array_diff($payment_instance_ids, $settings['referenceable_payment_instances']);
+    $payment_instance_ids = array_intersect($payment_instance_ids, $settings['referenceable_payment_instances']);
   }
 
   // build query for cards
