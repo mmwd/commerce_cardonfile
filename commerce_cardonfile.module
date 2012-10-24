@@ -446,7 +446,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
     if (!empty($valid_cards)) {
       // get options list with labels
       $card_option_element_type = variable_get('commerce_cardonfile_selector', 'radios');
-      $card_options = commerce_cardonfile_checkout_options_list($valid_cards, $card_option_element_type);
+      $card_options = commerce_cardonfile_element_options_list($valid_cards, $card_option_element_type);
 
       // determine default option
       $card_options_default_value = key($card_options);
@@ -568,7 +568,7 @@ function commerce_cardonfile_commerce_checkout_form_submit($form, &$form_state) 
  * @return
  *   An options array for selecting a card on file.
  */
-function commerce_cardonfile_checkout_options_list($stored_cards, $element_type = 'radios', $different = TRUE) {
+function commerce_cardonfile_element_options_list($stored_cards, $element_type = 'radios', $different = TRUE) {
   // Build an options array of stored credit cards.
   $options = array();
 
