@@ -1738,7 +1738,7 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
   }
 
   // invoke callback function
-  $return = $func($card_data, $order, $charge);
+  $return = $func($payment_method, $card_data, $order, $charge);
 
   return $return;
 }
