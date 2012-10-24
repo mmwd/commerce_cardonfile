@@ -435,61 +435,70 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
     'status' => 1,
   ));
 
-  // Exit if no cards on file
-  if (empty($stored_cards)) {
-    return;
-  }
+  // Build options form
+  $cardonfile_options_form = array();
 
-  // Filter out expired cards.
-  $valid_cards = array_filter($stored_cards, 'commerce_cardonfile_data_check_expiration');
+  // If have stored cards ...
+  if (!empty($stored_cards)) {
+    $valid_cards = array_filter($stored_cards, 'commerce_cardonfile_data_check_expiration');
 
-  // Exit if no VALID cards found
-  if (empty($valid_cards)) {
-    return;
-  }
+    // If have un-expired cards ...
+    if (!empty($valid_cards)) {
+      // get options list with labels
+      $card_option_element_type = variable_get('commerce_cardonfile_selector', 'radios');
+      $card_options = commerce_cardonfile_checkout_options_list($valid_cards, $card_option_element_type);
 
-  // get options list with labels
-  $card_option_element_type = variable_get('commerce_cardonfile_selector', 'radios');
-  $card_options = commerce_cardonfile_checkout_options_list($valid_cards, $card_option_element_type);
+      // determine default option
+      $card_options_default_value = key($card_options);
+      foreach (array_keys($card_options) as $card_id) {
+        if (isset($valid_cards[$card_id]) && !empty($valid_cards[$card_id]['instance_default'])) {
+          $card_options_default_value = $card_id;
 
-  // determine default option
-  $card_options_default_value = key($card_options);
-  foreach (array_keys($card_options) as $card_id) {
-    if (isset($valid_cards[$card_id]) && !empty($valid_cards[$card_id]['instance_default'])) {
-      $card_options_default_value = $card_id;
+          // move instance default to the top of the list
+          $card_option_label = $card_options[$card_id];
+          unset($card_options[$card_id]);
+          $card_options = array($card_id => $card_option_label) + $card_options;
+          break;
+        }
+      }
 
-      // move instance default to the top of the list
-      $card_option_label = $card_options[$card_id];
-      unset($card_options[$card_id]);
-      $card_options = array($card_id => $card_option_label) + $card_options;
-      break;
+      // create options element
+      $cardonfile_options_form = array(
+        '#type' => $card_option_element_type,
+        '#title' => t('Select a stored credit card'),
+        '#options' => $card_options,
+        '#default_value' => $card_options_default_value,
+        '#weight' => -10,
+        '#ajax' => array(
+          'callback' => 'commerce_payment_pane_checkout_form_details_refresh',
+          'wrapper' => 'payment-details',
+        ),
+      );
     }
   }
 
-  // create options element
-  $form['commerce_payment']['payment_details']['cardonfile'] = array(
-    '#type' => $card_option_element_type,
-    '#title' => t('Select a stored credit card'),
-    '#options' => $card_options,
-    '#default_value' => $card_options_default_value,
-    '#weight' => -10,
-    '#ajax' => array(
-      'callback' => 'commerce_payment_pane_checkout_form_details_refresh',
-      'wrapper' => 'payment-details',
-    ),
-  );
+  // update form with options
+  if (FALSE && !empty($cardonfile_options_form)) {
+    $form['commerce_payment']['payment_details']['cardonfile'] = $cardonfile_options_form;
 
-  // If the current value for the card selection element is not to use
-  // a different credit card, then hide the credit card form elements.
-  if (empty($form_state['values']) || $form_state['values']['commerce_payment']['payment_details']['cardonfile'] !== 'new') {
-    $form['commerce_payment']['payment_details']['credit_card']['#access'] = FALSE;
-  }
-
-  // Add the CSS to hide a sole credit card icon if specified.
-  if (variable_get('commerce_cardonfile_hide_cc_radio_button', TRUE)) {
-    if (count($form['commerce_payment']['payment_method']['#options']) == 1) {
-      $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_cardonfile') . '/theme/commerce_cardonfile.checkout.css';
+    // Add the CSS to hide a sole credit card icon if specified.
+    if (variable_get('commerce_cardonfile_hide_cc_radio_button', TRUE)) {
+      if (count($form['commerce_payment']['payment_method']['#options']) == 1) {
+        $form['commerce_payment']['payment_method']['#attached']['css'][] = drupal_get_path('module', 'commerce_cardonfile') . '/theme/commerce_cardonfile.checkout.css';
+      }
     }
+
+    // If the current value for the card selection element is not to use
+    // a different credit card, then hide the credit card form elements.
+    if (empty($form_state['values']) || $form_state['values']['commerce_payment']['payment_details']['cardonfile'] !== 'new') {
+      $form['commerce_payment']['payment_details']['credit_card']['#access'] = FALSE;
+    }
+  }
+  else {
+    $form['commerce_payment']['payment_details']['cardonfile'] = array(
+      '#type' => 'value',
+      '#value' => 'new',
+    );
   }
 
   // Add submit handler
