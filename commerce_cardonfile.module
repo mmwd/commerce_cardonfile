@@ -478,7 +478,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
   }
 
   // update form with options
-  if (FALSE && !empty($cardonfile_options_form)) {
+  if (!empty($cardonfile_options_form)) {
     $form['commerce_payment']['payment_details']['cardonfile'] = $cardonfile_options_form;
 
     // Add the CSS to hide a sole credit card icon if specified.
