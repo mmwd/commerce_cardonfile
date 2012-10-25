@@ -1855,9 +1855,11 @@ function _commerce_cardonfile_order_chargeable_cards($order) {
   }
 
   // Process cards to ensure capable of charging
-  // - First card to pass checks wins
+  // - remove if order owner does not match the card
+  // - remove if cannot charge
   foreach (array_keys($possible_cards) as $card_id) {
-    if (!commerce_cardonfile_data_can_charge($possible_cards[$card_id])) {
+    if ($possible_cards[$card_id]['uid'] != $order->uid ||
+        !commerce_cardonfile_data_can_charge($possible_cards[$card_id])) {
       unset($possible_cards[$card_id]);
     }
   }
