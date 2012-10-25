@@ -1794,13 +1794,30 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
 
   // process return from gateway module
   if ($method_return === FALSE) {
+    // Failure
+    $response['status'] = FALSE;
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE;
     $response['message'] = 'The payment method @method instance (@instance_id) failed for order @order_id, user @uid, card @cardId, charge amount @charge.';
+
+    // Let others react to a failed transaction
     rules_invoke_all('commerce_cardonfile_order_process_failed', $card_data, $order, $charge);
   }
   else {
+    // Success
+    $response['status'] = TRUE;
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS;
     $response['message'] = 'The payment method  @method instance (@instance_id) was successful for order @order_id, user @uid, card @cardId, charge amount @charge.';
+
+    // Store the last processed card on the order card reference field
+    if (isset($order_wrapper->commerce_cardonfile)) {
+      $order_ref_card_id = $order_wrapper->commerce_cardonfile->value();
+      if (empty($order_ref_card_id) || $order_ref_card_id != $card_data['card_id']) {
+        $order_wrapper->commerce_cardonfile = array('card_id' => $card_data['card_id']);
+        $order_wrapper->save();
+      }
+    }
+
+    // Let others react to a successful transaction
     rules_invoke_all('commerce_cardonfile_order_process_success', $card_data, $order, $charge);
   }
 
