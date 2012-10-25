@@ -1389,8 +1389,8 @@ function commerce_cardonfile_data_save(&$card_data) {
     $card_data += $card_data_original;
 
     // Check if can disable the card
-    if (empty($card_data['status']) && !empty($card_data_original['status']) &&
-        !commerce_cardonfile_data_can_delete($card_data)) {
+    $disabling = empty($card_data['status']) && !empty($card_data_original['status']);
+    if ($disabling && !commerce_cardonfile_data_can_delete($card_data)) {
       return FALSE;
     }
 
@@ -1796,10 +1796,12 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
   if ($method_return === FALSE) {
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE;
     $response['message'] = 'The payment method @method instance (@instance_id) failed for order @order_id, user @uid, card @cardId, charge amount @charge.';
+    rules_invoke_all('commerce_cardonfile_order_process_failed', $card_data, $order, $charge);
   }
   else {
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS;
     $response['message'] = 'The payment method  @method instance (@instance_id) was successful for order @order_id, user @uid, card @cardId, charge amount @charge.';
+    rules_invoke_all('commerce_cardonfile_order_process_success', $card_data, $order, $charge);
   }
 
   return $response;
