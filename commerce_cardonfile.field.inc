@@ -19,7 +19,7 @@ function commerce_cardonfile_field_info() {
         'include_disabled_payment_instances' => FALSE,
         'referenceable_payment_instances' => array(),
       ),
-      'default_widget' => 'options_select',
+      'default_widget' => 'commerce_cardonfile_reference_hidden',
       'default_formatter' => 'commerce_cardonfile_reference_label_link',
       'property_type' => 'commerce_cardonfile',
       'property_callbacks' => array('commerce_cardonfile_reference_property_info_callback'),
