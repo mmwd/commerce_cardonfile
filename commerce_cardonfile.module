@@ -1396,7 +1396,7 @@ function commerce_cardonfile_data_save(&$card_data) {
     }
 
     // Notify other modules that this card data has been updated.
-    module_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
+    rules_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
   }
   else {
     // Insert
@@ -1415,7 +1415,7 @@ function commerce_cardonfile_data_save(&$card_data) {
     $return = drupal_write_record('commerce_card_data', $card_data);
 
     // Notify other modules that this card data has been inserted.
-    module_invoke_all('commerce_cardonfile_data_insert', $card_data);
+    rules_invoke_all('commerce_cardonfile_data_insert', $card_data);
 
     // Save for other to access
     _commerce_cardonfile_data_current_request_last_inserted($card_data);
@@ -1488,7 +1488,7 @@ function commerce_cardonfile_data_delete($card_id) {
 
   if (!empty($card_data) && commerce_cardonfile_data_can_delete($card_data)) {
     // Notify other modules that this card data has been deleted.
-    module_invoke_all('commerce_cardonfile_data_delete', $card_data);
+    rules_invoke_all('commerce_cardonfile_data_delete', $card_data);
 
     // Delete references for card data
     commerce_cardonfile_data_delete_references($card_data);
