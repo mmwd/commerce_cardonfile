@@ -1384,9 +1384,8 @@ function commerce_cardonfile_data_save(&$card_data) {
   if (isset($card_data_original)) {
     // Update
     $card_data['changed'] = REQUEST_TIME;
-    $return = drupal_write_record('commerce_card_data', $card_data, 'card_id');
 
-    // Merge original to pass to hooks
+    // Merge original to pass to can_delete hook
     $card_data += $card_data_original;
 
     // Check if can disable the card
@@ -1394,6 +1393,8 @@ function commerce_cardonfile_data_save(&$card_data) {
         !commerce_cardonfile_data_can_delete($card_data)) {
       return FALSE;
     }
+
+    $return = drupal_write_record('commerce_card_data', $card_data, 'card_id');
 
     // Notify other modules that this card data has been updated.
     rules_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
