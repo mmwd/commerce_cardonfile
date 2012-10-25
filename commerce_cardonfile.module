@@ -7,6 +7,18 @@
  */
 
 // -----------------------------------------------------------------------
+// Constants
+
+// Card on file process status codes
+define('COMMERCE_COF_PROCESS_CODE_INSUFFICIENT', 'insufficient');
+define('COMMERCE_COF_PROCESS_CODE_CARD_EMPTY', 'no_card');
+define('COMMERCE_COF_PROCESS_CODE_METHOD_EMPTY', 'no_method');
+define('COMMERCE_COF_PROCESS_CODE_METHOD_NOT_CAPABLE', 'method_not_capable');
+define('COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE', 'method_failure');
+define('COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS', 'method_success');
+
+
+// -----------------------------------------------------------------------
 // Includes
 require_once dirname(__FILE__) . '/commerce_cardonfile.field.inc';
 
@@ -1128,6 +1140,7 @@ function theme_commerce_cardonfile_data_label(&$vars) {
  */
 function _commerce_cardonfile_data_card_replacements($card_data, $prefix = '@') {
   $replacement_keys = array(
+    'card_id',
     'card_name',
     'card_type',
     'card_number',
@@ -1686,10 +1699,31 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
  *  TRUE if the order was processed successfully
  */
 function commerce_cardonfile_order_process_card($order, $charge = array(), $card_data = array()) {
+  $response = array(
+    'status' => FALSE,
+    'code' => COMMERCE_COF_PROCESS_CODE_INSUFFICIENT,
+    'message' => '',
+    'message_variables' => array(),
+  );
+
+  // Exit if no order id
+  if (empty($order->order_id)) {
+    $response['message'] = 'Order ID is not provided.';
+    return $response;
+  }
+
+  $response['message_variables'] += array(
+    '@order_id' => $order->order_id,
+  );
+
   // Exit if no user associated with the order
   if (empty($order->uid)) {
-    return FALSE;
+    $response['message'] = 'Order owner not provided for order @order_id.';
+    return $response;
   }
+  $response['message_variables'] += array(
+    '@uid' => $order->uid,
+  );
 
   // Wrap up the order
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
@@ -1702,45 +1736,72 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
 
   // exit if no charge
   if (empty($charge) || empty($charge['amount']) || empty($charge['currency_code'])) {
-    return FALSE;
+    $response['message'] = 'Charge amount not provided for order @order_id.';
+    return $response;
   }
+
+  $response['message_variables'] += array(
+    '@charge' => commerce_currency_format($charge['amount'], $charge['currency_code']),
+  );
 
   // Determine order's chargeable card
   if (empty($card_data)) {
-    if (!isset($order_wrapper->chargeable_cardonfile)) {
-      return FALSE;
+    if (isset($order_wrapper->chargeable_cardonfile)) {
+      // card data returned is checked for "can charge"
+      $card_data = $order_wrapper->chargeable_cardonfile->value();
     }
-
-    // card data returned is checked for "can charge"
-    $card_data = $order_wrapper->chargeable_cardonfile->value();
   }
   elseif (!commerce_cardonfile_data_can_charge($card_data)) {
-    return FALSE;
+    // clear data for non-chargeable cards supplied
+    $card_data = array();
   }
 
   // Exit if not a qualified card
   if (empty($card_data) || empty($card_data['card_id']) || empty($card_data['instance_id'])) {
-    return FALSE;
+    $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EMPTY;
+    $response['message'] = 'No valid chargeable card on file found for the order @order_id and owner @uid.';
+    return $response;
   }
+
+  // update tokens with card data
+  $response['message_variables'] += _commerce_cardonfile_data_card_replacements($card_data, '@');
 
   // load payment method
   $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
   if (empty($payment_method)) {
-    return FALSE;
+    $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_EMPTY;
+    $response['message'] = 'The payment method instance (@instance_id) is not available on the system.';
+    return $response;
   }
+
+  $response['message_variables'] += array(
+    '@method' => isset($payment_method['short_title']) ? $payment_method['short_title'] : $payment_method['method_id'],
+  );
 
   // determine payment method's callback function
   $func = commerce_cardonfile_payment_method_callback($payment_method, 'process callback');
 
   // Exit if no callback - sanity check since it should have this if "can charge"
   if (empty($func)) {
-    return FALSE;
+    $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_NOT_CAPABLE;
+    $response['message'] = 'The payment method @method instance (@instance_id) does not implement a valid card on file "process callback".';
+    return $response;
   }
 
   // invoke callback function
-  $return = $func($payment_method, $card_data, $order, $charge);
+  $method_return = $func($payment_method, $card_data, $order, $charge);
 
-  return $return;
+  // process return from gateway module
+  if ($method_return === FALSE) {
+    $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE;
+    $response['message'] = 'The payment method @method instance (@instance_id) failed for order @order_id, user @uid, card @cardId, charge amount @charge.';
+  }
+  else {
+    $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS;
+    $response['message'] = 'The payment method  @method instance (@instance_id) was successful for order @order_id, user @uid, card @cardId, charge amount @charge.';
+  }
+
+  return $response;
 }
 
 /**
