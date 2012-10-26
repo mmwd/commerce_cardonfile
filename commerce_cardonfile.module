@@ -1095,11 +1095,6 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
       break;
 
     case 'delete':
-      // DENY delete if it is the instance_default
-      if (!empty($card_data['instance_default'])) {
-        return FALSE;
-      }
-
       // set operation callback
       $op_callback = commerce_cardonfile_payment_method_callback($payment_method, 'delete callback');
       break;
@@ -1408,7 +1403,7 @@ function commerce_cardonfile_data_save(&$card_data) {
     $card_data['changed'] = REQUEST_TIME;
 
     // Mark as default if this is the user's first active card for this instance_id
-    if (!empty($card_data['uid']) && !empty($card_data['instance_id'])) {
+    if (empty($card_data['instance_default']) && !empty($card_data['uid']) && !empty($card_data['instance_id'])) {
       $instance_active_cards = commerce_cardonfile_data_load_multiple($card_data['uid'], $card_data['instance_id'], TRUE);
       if (empty($instance_active_cards)) {
         $card_data['instance_default'] = 1;
