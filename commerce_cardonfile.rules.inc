@@ -69,6 +69,7 @@ function commerce_cardonfile_rules_event_info() {
   $events['commerce_cardonfile_order_process_failed'] = array(
     'label' => t('After a failed attempt to process an order'),
     'group' => t('Commerce Card on File'),
+    'access callback' => 'commerce_order_rules_access',
     'variables' => array(
       'card_data' => array(
         'type' => 'commerce_cardonfile_card_data',
@@ -92,6 +93,7 @@ function commerce_cardonfile_rules_event_info() {
   $events['commerce_cardonfile_order_process_success'] = array(
     'label' => t('After a successful processing of an order'),
     'group' => t('Commerce Card on File'),
+    'access callback' => 'commerce_order_rules_access',
     'variables' => array(
       'card_data' => array(
         'type' => 'commerce_cardonfile_card_data',
