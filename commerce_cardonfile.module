@@ -185,6 +185,7 @@ function commerce_cardonfile_hook_info() {
     'commerce_cardonfile_data_delete' => $base_info,
     'commerce_cardonfile_data_can_delete' => $base_info,
     'commerce_cardonfile_order_chargeable_cards' => $base_info,
+    'commerce_cardonfile_checkout_pane_form_alter' => $base_info,
   );
 
   return $hooks;
@@ -451,6 +452,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
 
   // Build options form
   $cardonfile_options_form = array();
+  $instance_default_card_id = NULL;
 
   // If have stored cards ...
   if (!empty($stored_cards)) {
@@ -466,7 +468,7 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
       $card_options_default_value = key($card_options);
       foreach (array_keys($card_options) as $card_id) {
         if (isset($valid_cards[$card_id]) && !empty($valid_cards[$card_id]['instance_default'])) {
-          $card_options_default_value = $card_id;
+          $card_options_default_value = $instance_default_card_id = $card_id;
 
           // move instance default to the top of the list
           $card_option_label = $card_options[$card_id];
@@ -515,6 +517,34 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
     );
   }
 
+  // Add mark as default element
+  $instance_default_default_value = 0;
+  if (!empty($instance_default_card_id)) {
+    if (empty($form_state['values']) ||
+      (!empty($form_state['values']['commerce_payment']['payment_details']['cardonfile']) &&
+      $form_state['values']['commerce_payment']['payment_details']['cardonfile'] == $instance_default_card_id)) {
+      $instance_default_default_value = 1;
+    }
+  }
+
+  $form['commerce_payment']['payment_details']['cardonfile_instance_default'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Set as your default card'),
+    '#default_value' => $instance_default_default_value,
+    '#access' => !$instance_default_default_value,
+    '#states' => array(
+      'invisible' => array(
+        ':input[name$="[cardonfile]"]' => array('value' => 'new'),
+      ),
+      'visible' => array(
+        ':input[name$="[cardonfile_store]"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+
+  // Allow others to alter this alter
+  drupal_alter('commerce_cardonfile_checkout_pane_form', $form['commerce_payment']['payment_details'], $form);
+
   // Add submit handler
   if (isset($form['buttons']['continue'])) {
     $form['buttons']['continue']['#submit'][] = 'commerce_cardonfile_commerce_checkout_form_submit';
@@ -525,14 +555,12 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
  * Checkout form submit callback to process card on file options
  */
 function commerce_cardonfile_commerce_checkout_form_submit($form, &$form_state) {
-  if (!isset($form_state['order'])) {
+  if (!isset($form_state['order']) || empty($form_state['values']['commerce_payment'])) {
     return;
   }
 
-  $values = &$form_state['values'];
-
-  if (!isset($values['commerce_payment']) ||
-      !isset($values['commerce_payment']['payment_details']['cardonfile'])) {
+  $pane_values = &$form_state['values']['commerce_payment'];
+  if (!isset($pane_values['payment_details']['cardonfile'])) {
     return;
   }
 
@@ -541,30 +569,34 @@ function commerce_cardonfile_commerce_checkout_form_submit($form, &$form_state) 
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
 
   $account = $form_state['account'];
-  $instance_id = $values['commerce_payment']['payment_method'];
+  $instance_id = $pane_values['payment_method'];
 
   // get card on file value
-  $card_id_selected = $values['commerce_payment']['payment_details']['cardonfile'];
-  if ($card_id_selected != 'new') {
-    // Save card id to reference field
-    $order_wrapper->commerce_cardonfile = array('card_id' => intval($card_id_selected));
-    $order_wrapper->save();
+  $card_id_selected = NULL;
+  if ($pane_values['payment_details']['cardonfile'] != 'new') {
+    $card_id_selected = intval($pane_values['payment_details']['cardonfile']);
   }
   elseif ($cof_last_inserts = _commerce_cardonfile_data_current_request_last_inserted()) {
-    $card_id_new = NULL;
     // Assumes the new card is the current request's last inserted card that
     // matches the user
     foreach ($cof_last_inserts as $card_data) {
       if ($card_data['uid'] == $account->uid && $card_data['instance_id'] == $instance_id) {
-        $card_id_new = $card_data['card_id'];
+        $card_id_selected = $card_data['card_id'];
         break;
       }
     }
+  }
 
-    if (!empty($card_id_new)) {
-      $order_wrapper->commerce_cardonfile = array('card_id' => $card_id_new);
-      $order_wrapper->save();
+  // Submit actions for card selected
+  if (!empty($card_id_selected)) {
+    // Mark as default
+    if (!empty($pane_values['payment_details']['cardonfile_instance_default'])) {
+      commerce_cardonfile_data_set_default_card($card_id_selected);
     }
+
+    // Save card id to the order reference field
+    $order_wrapper->commerce_cardonfile = array('card_id' => $card_id_selected);
+    $order_wrapper->save();
   }
 }
 
@@ -1366,11 +1398,6 @@ function commerce_cardonfile_data_save(&$card_data) {
   $return = FALSE;
   $card_data_original = NULL;
 
-  // Load original unchanged data
-  if (!empty($card_data['card_id'])) {
-    $card_data_original = commerce_cardonfile_data_load($card_data['card_id']);
-  }
-
   // Preprocess before saving and sending to hooks
   if (!empty($card_data['card_number'])) {
     // Always truncate card for security before passing to hooks
@@ -1378,8 +1405,16 @@ function commerce_cardonfile_data_save(&$card_data) {
   }
 
   // Save card data
-  if (isset($card_data_original)) {
+  if (!empty($card_data['card_id'])) {
     // Update
+    // Load original unchanged data
+    $card_data_original = commerce_cardonfile_data_load($card_data['card_id']);
+
+    // Skip save if have card_id but card does not exist
+    if (empty($card_data_original)) {
+      return $return;
+    }
+
     $card_data['changed'] = REQUEST_TIME;
 
     // Merge original to pass to can_delete hook
@@ -1575,15 +1610,27 @@ function commerce_cardonfile_data_can_charge($card_data) {
 }
 
 /**
+ * Set a card's instance default value
+ */
+function commerce_cardonfile_data_set_default_card($card_id, $instance_default_value = 1) {
+  if (!empty($card_id)) {
+    $update_data = array(
+      'card_id' => $card_id,
+      'instance_default' => !empty($instance_default_value),
+    );
+    return commerce_cardonfile_data_save($update_data);
+  }
+
+  return FALSE;
+}
+
+/**
  * Toggle the card data's default flag
  */
 function commerce_cardonfile_data_toggle_default_card($card_data) {
   if (!empty($card_data['card_id'])) {
-    $update_data = array(
-      'card_id' => $card_data['card_id'],
-      'instance_default' => (int) !$card_data['instance_default'],
-    );
-    return commerce_cardonfile_data_save($update_data);
+    $current = !empty($card_data['instance_default']);
+    return commerce_cardonfile_data_set_default_card($card_data['card_id'], !$current);
   }
 
   return FALSE;

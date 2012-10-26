@@ -99,3 +99,16 @@ function hook_commerce_cardonfile_order_chargeable_cards($order) {
 
   return $possible_cards;
 }
+
+/**
+ * Lets modules alter the card on file form elements that get added to the
+ * payment method form during checkout
+ *
+ * @param $pane_form
+ *  The pane form as it would be presented to a payment module
+ * @param $form
+ *  The complete checkout page form
+ */
+function hook_commerce_cardonfile_checkout_pane_form_alter(&$pane_form, $form) {
+  $pane_form['cardonfile_instance_default']['#description'] = t('Your default card will be used for automatic payments for all of your subscriptions.');
+}
