@@ -10,10 +10,15 @@
  */
 function commerce_cardonfile_rules_data_info() {
   return array(
-    'card_data' => array(
+    'commerce_cardonfile_card_data' => array(
       'label' => t('card data'),
-      'group' => t('Commerce Card on File'),
+      'group' => t('Card on File Data'),
       'property info' => commerce_cardonfile_data_property_info_callback(),
+    ),
+    'commerce_cardonfile_process_card_response' => array(
+      'label' => t('process card response'),
+      'group' => t('Process Card on File Response'),
+      'property info' => commerce_cardonfile_order_process_card_response_property_info_callback(),
     ),
   );
 }
@@ -29,7 +34,7 @@ function commerce_cardonfile_rules_event_info() {
     'group' => t('Commerce Card on File'),
     'variables' => array(
       'card_data' => array(
-        'type' => 'card_data',
+        'type' => 'commerce_cardonfile_card_data',
         'label' => t('Card Data'),
       ),
     ),
@@ -40,11 +45,11 @@ function commerce_cardonfile_rules_event_info() {
     'group' => t('Commerce Card on File'),
     'variables' => array(
       'card_data' => array(
-        'type' => 'card_data',
+        'type' => 'commerce_cardonfile_card_data',
         'label' => t('Card Data'),
       ),
       'card_data_unchanged' => array(
-        'type' => 'card_data',
+        'type' => 'commerce_cardonfile_card_data',
         'label' => t('Unchanged Card Data'),
       ),
     ),
@@ -55,7 +60,7 @@ function commerce_cardonfile_rules_event_info() {
     'group' => t('Commerce Card on File'),
     'variables' => array(
       'card_data' => array(
-        'type' => 'card_data',
+        'type' => 'commerce_cardonfile_card_data',
         'label' => t('Card Data'),
       ),
     ),
@@ -66,7 +71,7 @@ function commerce_cardonfile_rules_event_info() {
     'group' => t('Commerce Card on File'),
     'variables' => array(
       'card_data' => array(
-        'type' => 'card_data',
+        'type' => 'commerce_cardonfile_card_data',
         'label' => t('Card Data'),
       ),
       'order' => array(
@@ -76,6 +81,10 @@ function commerce_cardonfile_rules_event_info() {
       'charge' => array(
         'type' => 'commerce_price',
         'label' => t('Charge'),
+      ),
+      'response' => array(
+        'type' => 'commerce_cardonfile_process_card_response',
+        'label' => t('Process Card Response'),
       ),
     ),
   );
@@ -85,7 +94,7 @@ function commerce_cardonfile_rules_event_info() {
     'group' => t('Commerce Card on File'),
     'variables' => array(
       'card_data' => array(
-        'type' => 'card_data',
+        'type' => 'commerce_cardonfile_card_data',
         'label' => t('Card Data'),
       ),
       'order' => array(
@@ -95,6 +104,10 @@ function commerce_cardonfile_rules_event_info() {
       'charge' => array(
         'type' => 'commerce_price',
         'label' => t('Charge'),
+      ),
+      'response' => array(
+        'type' => 'commerce_cardonfile_process_card_response',
+        'label' => t('Process Card Response'),
       ),
     ),
   );

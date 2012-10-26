@@ -10,8 +10,10 @@
 // Constants
 
 // Card on file process status codes
-define('COMMERCE_COF_PROCESS_CODE_INSUFFICIENT', 'insufficient');
-define('COMMERCE_COF_PROCESS_CODE_CARD_EMPTY', 'no_card');
+define('COMMERCE_COF_PROCESS_CODE_INSUFFICIENT_DATA', 'insufficient');
+define('COMMERCE_COF_PROCESS_CODE_CARD_NA', 'card_na');
+define('COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED', 'card_expired');
+define('COMMERCE_COF_PROCESS_CODE_CARD_NOT_CHARGEABLE', 'card_not_chargeable');
 define('COMMERCE_COF_PROCESS_CODE_METHOD_EMPTY', 'no_method');
 define('COMMERCE_COF_PROCESS_CODE_METHOD_NOT_CAPABLE', 'method_not_capable');
 define('COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE', 'method_failure');
@@ -1686,7 +1688,69 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
 // Order handling
 
 /**
+ * Define property info for line item Kiala Point records
+ */
+function commerce_cardonfile_order_process_card_response_property_info_callback() {
+  return array(
+    'status' => array(
+      'label' => t('Status'),
+      'type' => 'boolean',
+    ),
+    'code' => array(
+      'label' => t('Status Code'),
+      'type' => 'text',
+      'options list' => 'commerce_cardonfile_order_process_card_status_code_options',
+    ),
+    'message' => array(
+      'label' => t('Message'),
+      'description' => t('Message for the process response.'),
+      'type' => 'text',
+      'getter callback' => 'commerce_cardonfile_order_process_card_get_properties',
+      'computed' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Returns an options list of processing card responses
+ */
+function commerce_cardonfile_order_process_card_status_code_options() {
+  return array(
+    COMMERCE_COF_PROCESS_CODE_INSUFFICIENT_DATA => t('Insufficient data'),
+    COMMERCE_COF_PROCESS_CODE_CARD_NA => t('No card available'),
+    COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED => t('Card expired'),
+    COMMERCE_COF_PROCESS_CODE_CARD_NOT_CHARGEABLE => t('Card not chargeable'),
+    COMMERCE_COF_PROCESS_CODE_METHOD_EMPTY => t('Payment method not valid'),
+    COMMERCE_COF_PROCESS_CODE_METHOD_NOT_CAPABLE => t('Payment method not capable'),
+    COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE => t('Payment method failure'),
+    COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS => t('Payment method success'),
+  );
+}
+
+/**
+ * Callback for getting payment transaction properties.
+ */
+function commerce_cardonfile_order_process_card_get_properties($data, array $options, $name) {
+  switch ($name) {
+    case 'message':
+      if (!empty($data['message'])) {
+        $message_variables = array();
+        if (!empty($data['message_variables']) && is_array($data['message_variables'])) {
+          $message_variables = $data['message_variables'];
+        }
+        return t($data['message'], $message_variables);
+      }
+      else {
+        return '';
+      }
+  }
+}
+
+/**
  * Process a charge for a given an order
+ *
+ * Wrapper function for _commerce_cardonfile_order_invoke_process_card() to
+ * trigger rules events
  *
  * @param $order
  *   An order object
@@ -1700,9 +1764,35 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
  *  TRUE if the order was processed successfully
  */
 function commerce_cardonfile_order_process_card($order, $charge = array(), $card_data = array()) {
+  $response = _commerce_cardonfile_order_invoke_process_card($order, $charge, $card_data);
+  if (empty($response) || empty($response['status'])) {
+    rules_invoke_all('commerce_cardonfile_order_process_failed', $card_data, $order, $charge, $response);
+  }
+  else {
+    rules_invoke_all('commerce_cardonfile_order_process_success', $card_data, $order, $charge, $response);
+  }
+
+  return $response;
+}
+
+/**
+ * Invoke the payment method callback to process a charge for a given an order
+ *
+ * @param $order
+ *   An order object
+ * @param $charge
+ *   Charge array of amount, currency_code
+ * @param $card_data
+ *   The card data array. If not provided, then the chargeable card for the
+ *   order will be determined.
+ *
+ * @return
+ *  TRUE if the order was processed successfully
+ */
+function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(), $card_data = array()) {
   $response = array(
     'status' => FALSE,
-    'code' => COMMERCE_COF_PROCESS_CODE_INSUFFICIENT,
+    'code' => COMMERCE_COF_PROCESS_CODE_INSUFFICIENT_DATA,
     'message' => '',
     'message_variables' => array(),
   );
@@ -1746,22 +1836,31 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
   );
 
   // Determine order's chargeable card
-  if (empty($card_data)) {
-    if (isset($order_wrapper->chargeable_cardonfile)) {
-      // card data returned is checked for "can charge"
-      $card_data = $order_wrapper->chargeable_cardonfile->value();
+  if (!empty($card_data)) {
+    // A specific card is provided ...
+    if (!commerce_cardonfile_order_can_charge_card($order, $card_data)) {
+      // check for expiration to set a specific code
+      if (!commerce_cardonfile_data_check_expiration($card_data)) {
+        $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED;
+        $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process @order_id.';
+      }
+      else {
+        $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_NOT_CHARGEABLE;
+        $response['message'] = 'Card provided cannot be charged for the order @order_id and user @uid.';
+      }
+
+      return $response;
     }
   }
-  elseif (!commerce_cardonfile_data_can_charge($card_data)) {
-    // clear data for non-chargeable cards supplied
-    $card_data = array();
-  }
-
-  // Exit if not a qualified card
-  if (empty($card_data) || empty($card_data['card_id']) || empty($card_data['instance_id'])) {
-    $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EMPTY;
-    $response['message'] = 'No valid chargeable card on file found for the order @order_id and owner @uid.';
-    return $response;
+  elseif (isset($order_wrapper->chargeable_card_preferred)) {
+    // Determine any chargeable cards ...
+    // card data returned is checked for "can charge"
+    $card_data = $order_wrapper->chargeable_card_preferred->value();
+    if (empty($card_data)) {
+      $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_NA;
+      $response['message'] = 'No chargeable card on file is available for the order @order_id and user @uid.';
+      return $response;
+    }
   }
 
   // update tokens with card data
@@ -1797,16 +1896,13 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
     // Failure
     $response['status'] = FALSE;
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE;
-    $response['message'] = 'The payment method @method instance (@instance_id) failed for order @order_id, user @uid, card @cardId, charge amount @charge.';
-
-    // Let others react to a failed transaction
-    rules_invoke_all('commerce_cardonfile_order_process_failed', $card_data, $order, $charge);
+    $response['message'] = 'The payment method @method instance (@instance_id) failed for order @order_id, user @uid, card @card_id, charge amount @charge.';
   }
   else {
     // Success
     $response['status'] = TRUE;
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS;
-    $response['message'] = 'The payment method  @method instance (@instance_id) was successful for order @order_id, user @uid, card @cardId, charge amount @charge.';
+    $response['message'] = 'The payment method  @method instance (@instance_id) was successful for order @order_id, user @uid, card @card_id, charge amount @charge.';
 
     // Store the last processed card on the order card reference field
     if (isset($order_wrapper->commerce_cardonfile)) {
@@ -1816,9 +1912,6 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
         $order_wrapper->save();
       }
     }
-
-    // Let others react to a successful transaction
-    rules_invoke_all('commerce_cardonfile_order_process_success', $card_data, $order, $charge);
   }
 
   return $response;
@@ -1828,22 +1921,47 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
  * Order properties getter callback
  */
 function commerce_cardonfile_order_property_get($entity, array $options, $name) {
-  switch ($name) {
-    case 'chargeable_cardonfile':
-      // Exit if no order owner
-      if (empty($entity->uid)) {
-        return;
-      }
+  // Exit if no order owner
+  if (empty($entity->uid)) {
+    return;
+  }
 
+  switch ($name) {
+    case 'chargeable_cards':
+      $cards = _commerce_cardonfile_order_chargeable_cards($entity);
+      return !empty($cards) ? $cards : NULL;
+
+    case 'chargeable_card_preferred':
       $cards = _commerce_cardonfile_order_chargeable_cards($entity);
       return !empty($cards) ? reset($cards) : NULL;
-      break;
   }
 }
 
 /**
- * Returns the chargeable cards for the given order that are returned from
- * hook_commerce_cardonfile_order_chargeable_cards().
+ * Returns TRUE if the card can be charged for the given order
+ */
+function commerce_cardonfile_order_can_charge_card($order, $card_data) {
+  // DENY if no order id
+  if (empty($order->order_id)) {
+    return FALSE;
+  }
+
+  // DENY if no owner provided
+  if (empty($order->uid) || empty($card_data['uid'])) {
+    return FALSE;
+  }
+
+  // DENY if owners do not match
+  if ($card_data['uid'] != $order->uid) {
+    return FALSE;
+  }
+
+  return commerce_cardonfile_data_can_charge($card_data);
+}
+
+/**
+ * Returns the chargeable cards for the given order that are validated that
+ * they can be charged
  *
  * @param $order
  *  An order object
@@ -1853,6 +1971,30 @@ function commerce_cardonfile_order_property_get($entity, array $options, $name) 
  *   an empty array if no cards are found
  */
 function _commerce_cardonfile_order_chargeable_cards($order) {
+  $possible_cards = _commerce_cardonfile_invoke_order_chargeable_cards($order);
+
+  // Validate cards to ensure capable of charging
+  foreach (array_keys($possible_cards) as $card_id) {
+    if (!commerce_cardonfile_order_can_charge_card($order, $possible_cards[$card_id])) {
+      unset($possible_cards[$card_id]);
+    }
+  }
+
+  return $possible_cards;
+}
+
+/**
+ * Invokes and returns the chargeable cards for the given order from
+ * hook_commerce_cardonfile_order_chargeable_cards().
+ *
+ * @param $order
+ *  An order object
+ *
+ * @return
+ *   An associative array of card data keyed by card_id or
+ *   an empty array if no cards are found
+ */
+function _commerce_cardonfile_invoke_order_chargeable_cards($order) {
   if (empty($order->uid)) {
     return array();
   }
@@ -1872,16 +2014,6 @@ function _commerce_cardonfile_order_chargeable_cards($order) {
   // Exit if cards invalid
   if (empty($possible_cards)) {
     return array();
-  }
-
-  // Process cards to ensure capable of charging
-  // - remove if order owner does not match the card
-  // - remove if cannot charge
-  foreach (array_keys($possible_cards) as $card_id) {
-    if ($possible_cards[$card_id]['uid'] != $order->uid ||
-        !commerce_cardonfile_data_can_charge($possible_cards[$card_id])) {
-      unset($possible_cards[$card_id]);
-    }
   }
 
   // Sort per the returned hook card ids
