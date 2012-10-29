@@ -13,11 +13,13 @@ function commerce_cardonfile_rules_data_info() {
     'commerce_cardonfile_card_data' => array(
       'label' => t('card data'),
       'group' => t('Card on File Data'),
+      'wrap' => TRUE,
       'property info' => commerce_cardonfile_data_property_info_callback(),
     ),
     'commerce_cardonfile_process_card_response' => array(
       'label' => t('process card response'),
       'group' => t('Process Card on File Response'),
+      'wrap' => TRUE,
       'property info' => commerce_cardonfile_order_process_card_response_property_info_callback(),
     ),
   );
