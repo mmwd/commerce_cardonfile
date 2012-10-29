@@ -59,8 +59,24 @@ function commerce_cardonfile_rules_event_info() {
     ),
   );
 
+  $events['commerce_cardonfile_data_disable'] = array(
+    'label' => t('After disabling a card on file'),
+    'group' => t('Commerce Card on File'),
+    'access callback' => 'commerce_cardonfile_data_rules_access',
+    'variables' => array(
+      'card_data' => array(
+        'type' => 'commerce_cardonfile_card_data',
+        'label' => t('Card Data'),
+      ),
+      'card_data_unchanged' => array(
+        'type' => 'commerce_cardonfile_card_data',
+        'label' => t('Unchanged Card Data'),
+      ),
+    ),
+  );
+
   $events['commerce_cardonfile_data_delete'] = array(
-    'label' => t('After deleting a card on file'),
+    'label' => t('After deleting a card on file database record'),
     'group' => t('Commerce Card on File'),
     'access callback' => 'commerce_cardonfile_data_rules_access',
     'variables' => array(

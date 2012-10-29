@@ -182,6 +182,7 @@ function commerce_cardonfile_hook_info() {
   $hooks = array(
     'commerce_cardonfile_data_insert' => $base_info,
     'commerce_cardonfile_data_update' => $base_info,
+    'commerce_cardonfile_data_disable' => $base_info,
     'commerce_cardonfile_data_delete' => $base_info,
     'commerce_cardonfile_data_can_delete' => $base_info,
     'commerce_cardonfile_order_chargeable_cards' => $base_info,
@@ -1450,6 +1451,11 @@ function commerce_cardonfile_data_save(&$card_data) {
 
     // Notify other modules that this card data has been updated.
     rules_invoke_all('commerce_cardonfile_data_update', $card_data, $card_data_original);
+
+    // Notify other modules that this card data has been disabled.
+    if ($disabling) {
+      rules_invoke_all('commerce_cardonfile_data_disable', $card_data, $card_data_original);
+    }
   }
   else {
     // Insert
