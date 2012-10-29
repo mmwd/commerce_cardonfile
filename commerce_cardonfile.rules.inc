@@ -14,6 +14,7 @@ function commerce_cardonfile_rules_data_info() {
       'label' => t('card data'),
       'group' => t('Card on File Data'),
       'wrap' => TRUE,
+      'token type' => 'commerce-cardonfile-card-data',
       'property info' => commerce_cardonfile_data_property_info_callback(),
     ),
     'commerce_cardonfile_process_card_response' => array(
