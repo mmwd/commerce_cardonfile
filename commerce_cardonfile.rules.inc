@@ -32,6 +32,7 @@ function commerce_cardonfile_rules_event_info() {
   $events['commerce_cardonfile_data_insert'] = array(
     'label' => t('After saving a new card on file'),
     'group' => t('Commerce Card on File'),
+    'access callback' => 'commerce_cardonfile_data_rules_access',
     'variables' => array(
       'card_data' => array(
         'type' => 'commerce_cardonfile_card_data',
@@ -43,6 +44,7 @@ function commerce_cardonfile_rules_event_info() {
   $events['commerce_cardonfile_data_update'] = array(
     'label' => t('After updating an existing card on file'),
     'group' => t('Commerce Card on File'),
+    'access callback' => 'commerce_cardonfile_data_rules_access',
     'variables' => array(
       'card_data' => array(
         'type' => 'commerce_cardonfile_card_data',
@@ -58,6 +60,7 @@ function commerce_cardonfile_rules_event_info() {
   $events['commerce_cardonfile_data_delete'] = array(
     'label' => t('After disabling a card on file'),
     'group' => t('Commerce Card on File'),
+    'access callback' => 'commerce_cardonfile_data_rules_access',
     'variables' => array(
       'card_data' => array(
         'type' => 'commerce_cardonfile_card_data',

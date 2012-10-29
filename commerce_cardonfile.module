@@ -1063,6 +1063,15 @@ function commerce_cardonfile_user_access($account) {
 }
 
 /**
+ * Rules integration access callback.
+ */
+function commerce_cardonfile_data_rules_access($type, $name) {
+  if ($type == 'event' || $type == 'condition') {
+    return commerce_cardonfile_data_access('view');
+  }
+}
+
+/**
  * Determines if the current user has access to perform an operation on the
  * given card data array.
  *
@@ -1156,8 +1165,10 @@ function commerce_cardonfile_data_access($op = 'view', $card_data = array(), $ow
   }
 
   // ALLOW access for users with permission to manage their own card data.
-  if (!empty($user->uid) && $user->uid == $owner_uid && user_access("$op own card data")) {
-    return TRUE;
+  if (!empty($owner_uid)) {
+    if (!empty($user->uid) && $user->uid == $owner_uid && user_access("$op own card data")) {
+      return TRUE;
+    }
   }
 
   // DENY by default
