@@ -945,6 +945,12 @@ function commerce_cardonfile_data_property_info_callback() {
       'label' => t('Card Expiration Year'),
       'type' => 'integer',
     ),
+    'card_exp_timestamp' => array(
+      'label' => t('Card Expiration Timestamp'),
+      'type' => 'date',
+      'getter callback' => 'commerce_cardonfile_data_property_get',
+      'computed' => TRUE,
+    ),
     'card_expired' => array(
       'label' => t('Card Expired'),
       'type' => 'boolean',
@@ -1012,6 +1018,9 @@ function commerce_cardonfile_data_property_get($data, array $options, $name) {
 
     case 'card_expired':
       return !commerce_cardonfile_data_check_expiration($data);
+
+    case 'card_exp_timestamp':
+      return commerce_cardonfile_data_expiration_timestamp($data);
 
     case 'can_charge':
       return commerce_cardonfile_data_can_charge($data);
@@ -1564,6 +1573,28 @@ function commerce_cardonfile_data_delete_references($card_data) {
       }
     }
   }
+}
+
+/**
+ * Returns the UNIX timestamp for the card data expiration
+ */
+function commerce_cardonfile_data_expiration_timestamp($card_data) {
+  if (empty($card_data['card_exp_month']) || empty($card_data['card_exp_year'])) {
+    return;
+  }
+
+  $month = (int) $card_data['card_exp_month'];
+  $year = (int) $card_data['card_exp_year'];
+
+  if ($month + 1 > 12) {
+    $month = 1;
+    $year++;
+  }
+  else {
+    $month++;
+  }
+
+  return gmmktime(0, 0, 0, $month, 1, $year);
 }
 
 /**
