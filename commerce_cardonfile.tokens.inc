@@ -109,9 +109,13 @@ function commerce_cardonfile_tokens($type, $tokens, array $data = array(), array
     }
 
     // timestamp tokens
-    foreach (array('created', 'changed', 'card_exp_timestamp') as $date) {
-      if ($created_tokens = token_find_with_prefix($tokens, $date)) {
-        $replacements += token_generate('date', $created_tokens, array('date' => $card_data[$date]), $options);
+    foreach (array('created', 'changed', 'card-exp-timestamp') as $date_token) {
+      if ($date_tokens = token_find_with_prefix($tokens, $date_token)) {
+        $date_property_name = str_replace('-', '_', $date_token);
+        if (isset($wrapper->{$date_property_name})) {
+          $date_timestamp = $wrapper->{$date_property_name}->value();
+          $replacements += token_generate('date', $date_tokens, array('date' => $date_timestamp), $options);
+        }
       }
     }
   }
