@@ -100,14 +100,17 @@ function commerce_cardonfile_create_form_submit($form, &$form_state) {
 
   // Invoke the payment method's callback.
   $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
-  $callback_return = $create_callback($form, $form_state, $payment_method, $card_data);
-  if (!$callback_return || empty($card_data['remote_id'])) {
+  $callback_return = $create_callback($payment_method, $form, $form_state['values'], $card_data);
+
+  if (empty($callback_return)) {
     // Display a message if we failed to communicate properly with the payment
     // gateway in the Card on File create callback.
     drupal_set_message(t('We encountered an error attempting to create your card on file. Please try again and contact us if this error persists.'), 'error');
     $form_state['rebuild'] = TRUE;
     return;
   }
+  // set remote id returned
+  $card_data['remote_id'] = $callback_return;
 
   // store card data
   commerce_cardonfile_data_save($card_data);
