@@ -98,9 +98,18 @@ function commerce_cardonfile_create_form_submit($form, &$form_state) {
     'status' => 1,
   ) + $card_data;
 
+  // resolve billing address
+  $billing_addressfield = array();
+  if (!empty($values['commerce_customer_address'])) {
+    $billing_addressfield_languages = reset($values['commerce_customer_address']);
+    if (!empty($billing_addressfield_languages)) {
+      $billing_addressfield = reset($billing_addressfield_languages);
+    }
+  }
+
   // Invoke the payment method's callback.
   $create_callback = commerce_cardonfile_payment_method_callback($payment_method, 'create callback');
-  $callback_return = $create_callback($payment_method, $form, $form_state['values'], $card_data);
+  $callback_return = $create_callback($payment_method, $form, $values, $billing_addressfield, $card_data);
 
   if (empty($callback_return)) {
     // Display a message if we failed to communicate properly with the payment
