@@ -1560,6 +1560,38 @@ function commerce_cardonfile_data_delete($card_id) {
 }
 
 /**
+ * Deletes multiple stored card data record by local ID.
+ *
+ * @param $card_ids
+ *   The local ID of the card data to delete.
+ */
+function commerce_cardonfile_data_delete_multiple($card_ids) {
+  if (empty($card_ids)) {
+    return;
+  }
+
+  $cards = commerce_cardonfile_data_load_multiple_by_id($card_ids);
+  if (empty($cards)) {
+    return;
+  }
+
+  foreach ($cards as $card_id => $card_data) {
+    if (commerce_cardonfile_data_can_delete($card_data)) {
+      // Notify other modules that this card data has been deleted.
+      rules_invoke_all('commerce_cardonfile_data_delete', $card_data);
+
+      // Delete references for card data
+      commerce_cardonfile_data_delete_references($card_data);
+    }
+  }
+
+  // Delete card data
+  db_delete('commerce_card_data')
+    ->condition('card_id', array_keys($cards))
+    ->execute();
+}
+
+/**
  * Deletes any references to the given card data.
  */
 function commerce_cardonfile_data_delete_references($card_data) {
@@ -1773,6 +1805,25 @@ function commerce_cardonfile_data_ensure_single_instance_default($card_data) {
   return $num_updated;
 }
 
+
+// -----------------------------------------------------------------------
+// User handling
+
+/**
+ * Implements hook_user_delete()
+ */
+function commerce_cardonfile_user_delete($account) {
+  if (empty($account->uid)) {
+    return;
+  }
+
+  $cards = commerce_cardonfile_data_load_multiple_by_id(array(), array('uid' => $account->uid));
+  if (empty($cards)) {
+    return;
+  }
+
+  commerce_cardonfile_data_delete_multiple(array_keys($cards));
+}
 
 // -----------------------------------------------------------------------
 // Order handling
