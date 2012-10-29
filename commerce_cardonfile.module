@@ -938,6 +938,10 @@ function commerce_cardonfile_data_property_info_callback() {
       'label' => t('Name on the Card'),
       'type' => 'text',
     ),
+    'card_number' => array(
+      'label' => t('Card Number (last 4 digits)'),
+      'type' => 'text',
+    ),
     'card_exp_month' => array(
       'label' => t('Card Expiration Month'),
       'type' => 'integer',
