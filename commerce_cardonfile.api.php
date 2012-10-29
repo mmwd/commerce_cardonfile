@@ -29,6 +29,23 @@ function hook_commerce_cardonfile_data_update($card_data, $card_data_original) {
 }
 
 /**
+ * Card Data Disable
+ *
+ * - Disabled cards have a card data status = 0.
+ * - Disabled cards are removed from the remote gateway if the payment
+ *   method supports deleting.
+ *
+ * @param $card_data
+ *   The saved card data.
+  * @param $card_data_original
+ *   The original unchanged card data.
+ */
+function hook_commerce_cardonfile_data_disable($card_data, $card_data_original) {
+  // perform custom operations reacting to the disabling of an existing
+  // card data
+}
+
+/**
  * Card Data Delete
  *
  * @param $card_data
