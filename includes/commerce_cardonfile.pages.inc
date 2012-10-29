@@ -170,24 +170,24 @@ function commerce_cardonfile_update_form($form, &$form_state, $card_data = array
     'exp_year' => $card_data['card_exp_year'],
   );
 
-  // Address defaults
-  $address_default_values = array();
-
-  // get address from payment method
-  if (!empty($card_data)) {
-    $address_callback_return = $get_address_callback($payment_method, $card_data);
-    if (!empty($address_callback_return)) {
-      $address_default_values = $address_callback_return;
-    }
-  }
-
   // Attach card edit form
   $card_fields = array();
   _commerce_cardonfile_attach_card_edit_form($form, $form_state, $payment_method, $card_fields, $card_default_values);
   $form['credit_card']['number']['#description'] = t('Leaving this field alone will leave the current card number unchanged.');
 
   // Attach billing address
-  _commerce_cardonfile_attach_billing_address_edit_form($form, $form_state, $payment_method, $address_default_values);
+  $address_default_values = array();
+
+  // get address from payment method
+  if (!empty($get_address_callback)) {
+    if (!empty($card_data)) {
+      $address_callback_return = $get_address_callback($payment_method, $card_data);
+      if (!empty($address_callback_return)) {
+        $address_default_values = $address_callback_return;
+      }
+    }
+    _commerce_cardonfile_attach_billing_address_edit_form($form, $form_state, $payment_method, $address_default_values);
+  }
 
   // disable entire form if no update callback
   $form['#disabled'] = empty($update_callback);
