@@ -2049,6 +2049,10 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
     $response['code'] = COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS;
     $response['message'] = 'The payment method  @method instance (@instance_id) was successful for order @order_id, user @uid, card @card_id, charge amount @charge.';
 
+    // load a fresh order in case it was modified during method callback
+    $order = commerce_order_load($order->order_id);
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+
     // Store the last processed card on the order card reference field
     if (isset($order_wrapper->commerce_cardonfile)) {
       $order_ref_card_id = $order_wrapper->commerce_cardonfile->value();
