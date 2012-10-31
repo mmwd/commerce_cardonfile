@@ -299,6 +299,9 @@ function commerce_cardonfile_views_data() {
     'field' => array(
       'handler' => 'views_handler_field_boolean',
       'click sortable' => TRUE,
+      'output formats' => array(
+        'boolean' => array(1, 0),
+      ),
     ),
     'filter' => array(
       'handler' => 'views_handler_filter_boolean_operator',
