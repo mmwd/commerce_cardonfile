@@ -37,6 +37,7 @@ function commerce_cardonfile_settings_form($form, &$form_state) {
     '#type' => 'checkbox',
     '#title' => t('Allow customers to store more than one card on file if it is supported by your payment gateway.'),
     '#default_value' => variable_get('commerce_cardonfile_multiple', TRUE),
+    '#disabled' => TRUE,
   );
 
   $form['commerce_cardonfile_hide_cc_radio_button'] = array(
