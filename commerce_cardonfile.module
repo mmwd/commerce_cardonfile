@@ -528,11 +528,13 @@ function commerce_cardonfile_form_alter(&$form, &$form_state, $form_id) {
     }
   }
 
+  $force_instance_default = empty($stored_cards);
   $form['commerce_payment']['payment_details']['cardonfile_instance_default'] = array(
     '#type' => 'checkbox',
     '#title' => t('Set as your default card'),
-    '#default_value' => $instance_default_default_value,
+    '#default_value' => $instance_default_default_value || $force_instance_default,
     '#access' => !$instance_default_default_value,
+    '#disabled' => $force_instance_default,
     '#states' => array(
       'invisible' => array(
         ':input[name$="[cardonfile]"]' => array('value' => 'new'),
@@ -561,7 +563,10 @@ function commerce_cardonfile_commerce_checkout_form_submit($form, &$form_state) 
   }
 
   $pane_values = &$form_state['values']['commerce_payment'];
-  if (!isset($pane_values['payment_details']['cardonfile'])) {
+  $store_card = !empty($pane_values['payment_details']['credit_card']['cardonfile_store']);
+
+  // Exit if no card selection
+  if (empty($pane_values['payment_details']['cardonfile'])) {
     return;
   }
 
@@ -577,7 +582,7 @@ function commerce_cardonfile_commerce_checkout_form_submit($form, &$form_state) 
   if ($pane_values['payment_details']['cardonfile'] != 'new') {
     $card_id_selected = intval($pane_values['payment_details']['cardonfile']);
   }
-  elseif ($cof_last_inserts = _commerce_cardonfile_data_current_request_last_inserted()) {
+  elseif ($store_card && ($cof_last_inserts = _commerce_cardonfile_data_current_request_last_inserted())) {
     // Assumes the new card is the current request's last inserted card that
     // matches the user
     foreach ($cof_last_inserts as $card_data) {
