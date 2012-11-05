@@ -1858,6 +1858,11 @@ function commerce_cardonfile_order_process_card_response_property_info_callback(
       'getter callback' => 'commerce_cardonfile_order_process_card_get_properties',
       'computed' => TRUE,
     ),
+    'card_chosen' => array(
+      'label' => t('Card Chosen'),
+      'type' => 'struct',
+      'property info' => commerce_cardonfile_data_property_info_callback(),
+    ),
   );
 }
 
