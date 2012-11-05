@@ -90,7 +90,7 @@ function commerce_cardonfile_views_data() {
 
   // Card payment method
   $data['commerce_card_data']['payment_method'] = array(
-    'title' => t('Payment Method'),
+    'title' => t('Payment method'),
     'help' => t('The payment method related to this card.'),
     'field' => array(
       'handler' => 'views_handler_field',
@@ -109,8 +109,8 @@ function commerce_cardonfile_views_data() {
 
   // Card instance id
   $data['commerce_card_data']['instance_id'] = array(
-    'title' => t('Payment Method Instance ID'),
-    'help' => t('he payment method instance ID related to this card.'),
+    'title' => t('Payment method instance ID'),
+    'help' => t('The payment method instance ID related to this card.'),
     'field' => array(
       'handler' => 'views_handler_field',
       'click sortable' => TRUE,
@@ -240,7 +240,6 @@ function commerce_cardonfile_views_data() {
     ),
   );
 
-
   // Card status
   $data['commerce_card_data']['status'] = array(
     'title' => t('Card data status'),
@@ -333,11 +332,11 @@ function commerce_cardonfile_views_plugins() {
   return array(
     'argument validator' => array(
       'commerce_cof_card_id' => array(
-        'title' => t('Card ID Access'),
+        'title' => t('Card ID access'),
         'handler' => 'commerce_cardonfile_plugin_argument_validate_card_id',
       ),
       'commerce_cof_owner' => array(
-        'title' => t('Card Owner Access'),
+        'title' => t('Card owner access'),
         'handler' => 'commerce_cardonfile_plugin_argument_validate_owner',
       ),
     ),

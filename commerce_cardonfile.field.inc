@@ -74,7 +74,7 @@ function commerce_cardonfile_field_instance_settings_form($field, $instance) {
     '#options' => $options,
     '#default_value' => is_array($settings['referenceable_payment_instances']) ? $settings['referenceable_payment_instances'] : array(),
     '#multiple' => TRUE,
-    //'#weight' => -3,
+    // '#weight' => -3,
   );
 
   return $form;

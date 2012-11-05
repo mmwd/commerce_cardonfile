@@ -13,7 +13,7 @@ function commerce_cardonfile_token_info() {
   $type = array(
     'name' => t('Card Data'),
     'description' => t('Tokens related to card on file data.'),
-    'needs-data' =>'commerce-cardonfile-card-data',
+    'needs-data' => 'commerce-cardonfile-card-data',
   );
 
   // Tokens for card data.
