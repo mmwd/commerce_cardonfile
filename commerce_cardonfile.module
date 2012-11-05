@@ -2017,13 +2017,33 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
       return $response;
     }
   }
-  elseif (isset($order_wrapper->chargeable_card_preferred)) {
+  elseif ($possible_cards = _commerce_cardonfile_invoke_order_chargeable_cards($order)) {
     // Determine any chargeable cards ...
-    // card data returned is checked for "can charge"
-    $card_data = $order_wrapper->chargeable_card_preferred->value();
+    $card_data = array();
+    $unchargeable_cards = array();
+    foreach ($possible_cards as $card_id => $possible_card) {
+      if (commerce_cardonfile_order_can_charge_card($order, $possible_card)) {
+        $card_data = $possible_card;
+        break;
+      }
+      else {
+        $unchargeable_cards[$card_id] = $possible_card;
+      }
+    }
+
     if (empty($card_data)) {
       $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_NA;
       $response['message'] = 'No chargeable card on file is available for the order @order_id and user @uid.';
+
+      if (!empty($unchargeable_cards)) {
+        // check first unchargeable card for expiration
+        $unchargeable_card_top = reset($unchargeable_cards);
+        if (!commerce_cardonfile_data_check_expiration($unchargeable_card_top)) {
+          $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED;
+          $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process @order_id.';
+        }
+      }
+
       return $response;
     }
 
