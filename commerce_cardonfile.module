@@ -2038,6 +2038,7 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
       if (!empty($unchargeable_cards)) {
         // check first unchargeable card for expiration
         $unchargeable_card_top = reset($unchargeable_cards);
+        $response['card_chosen'] = $unchargeable_card_top;
         if (!commerce_cardonfile_data_check_expiration($unchargeable_card_top)) {
           $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED;
           $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process @order_id.';
