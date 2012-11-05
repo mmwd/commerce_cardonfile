@@ -1915,11 +1915,19 @@ function commerce_cardonfile_order_process_card_get_properties($data, array $opt
  */
 function commerce_cardonfile_order_process_card($order, $charge = array(), $card_data = array()) {
   $response = _commerce_cardonfile_order_invoke_process_card($order, $charge, $card_data);
+  $card_chosen = array();
+  if (!empty($response['card_chosen'])) {
+    $card_chosen = $response['card_chosen'];
+  }
+  elseif (!empty($card_data)) {
+    $card_chosen = $card_data;
+  }
+
   if (empty($response) || empty($response['status'])) {
-    rules_invoke_all('commerce_cardonfile_order_process_failed', $card_data, $order, $charge, $response);
+    rules_invoke_all('commerce_cardonfile_order_process_failed', $card_chosen, $order, $charge, $response);
   }
   else {
-    rules_invoke_all('commerce_cardonfile_order_process_success', $card_data, $order, $charge, $response);
+    rules_invoke_all('commerce_cardonfile_order_process_success', $card_chosen, $order, $charge, $response);
   }
 
   return $response;
@@ -1988,6 +1996,8 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
   // Determine order's chargeable card
   if (!empty($card_data)) {
     // A specific card is provided ...
+    $response['card_chosen'] = $card_data;
+
     if (!commerce_cardonfile_order_can_charge_card($order, $card_data)) {
       // check for expiration to set a specific code
       if (!commerce_cardonfile_data_check_expiration($card_data)) {
@@ -2011,6 +2021,12 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
       $response['message'] = 'No chargeable card on file is available for the order @order_id and user @uid.';
       return $response;
     }
+
+    $response['card_chosen'] = $card_data;
+  }
+
+  if (empty($response['card_chosen'])) {
+    $response['card_chosen'] = $card_data;
   }
 
   // update tokens with card data
