@@ -1851,6 +1851,13 @@ function commerce_cardonfile_order_process_card_response_property_info_callback(
       'type' => 'text',
       'options list' => 'commerce_cardonfile_order_process_card_status_code_options',
     ),
+    'error_level' => array(
+      'label' => t('Error Level'),
+      'type' => 'integer',
+      'options list' => 'commerce_cardonfile_order_process_card_error_level_options',
+      'getter callback' => 'commerce_cardonfile_order_process_card_get_properties',
+      'computed' => TRUE,
+    ),
     'message' => array(
       'label' => t('Message'),
       'description' => t('Message for the process response.'),
@@ -1867,7 +1874,7 @@ function commerce_cardonfile_order_process_card_response_property_info_callback(
 }
 
 /**
- * Returns an options list of processing card responses
+ * Returns an options list of processing card response status codes
  */
 function commerce_cardonfile_order_process_card_status_code_options() {
   return array(
@@ -1879,6 +1886,17 @@ function commerce_cardonfile_order_process_card_status_code_options() {
     COMMERCE_COF_PROCESS_CODE_METHOD_NOT_CAPABLE => t('Payment method not capable'),
     COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE => t('Payment method failure'),
     COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS => t('Payment method success'),
+  );
+}
+
+/**
+ * Returns an option list of processing card response error level
+ */
+function commerce_cardonfile_order_process_card_error_level_options() {
+  return array(
+    0 => t('Notice'),
+    1 => t('Warning'),
+    2 => t('Error'),
   );
 }
 
@@ -1898,7 +1916,36 @@ function commerce_cardonfile_order_process_card_get_properties($data, array $opt
       else {
         return '';
       }
+
+    case 'error_level':
+      return commerce_cardonfile_order_process_card_error_level($data);
   }
+}
+
+/**
+ * Returns the error level for a given card processing response array
+ */
+function commerce_cardonfile_order_process_card_error_level($response) {
+  if (empty($response['code'])) {
+    return 0;
+  }
+
+  $level = 0;
+  switch ($response['code']) {
+    case COMMERCE_COF_PROCESS_CODE_METHOD_EMPTY:
+    case COMMERCE_COF_PROCESS_CODE_METHOD_NOT_CAPABLE:
+      $level = 1;
+      break;
+
+    case COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED:
+    case COMMERCE_COF_PROCESS_CODE_CARD_NOT_CHARGEABLE:
+    case COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE:
+    case COMMERCE_COF_PROCESS_CODE_METHOD_SUCCESS:
+      $level = 2;
+      break;
+  }
+
+  return $level;
 }
 
 /**
