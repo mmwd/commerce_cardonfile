@@ -20,9 +20,9 @@ function commerce_cardonfile_token_info() {
   );
 
   // remove unsupported properties
-  $type_props['commerce-cardonfile-card-data'] = array_diff_key($type_props['commerce-cardonfile-card-data'], array_flip(array(
-      'rule_config', 'payment_method_instance',
-  )));
+  unset($type_props['commerce-cardonfile-card-data']['rule_config']);
+  unset($type_props['commerce-cardonfile-card-data']['payment_method_instance']);
+  unset($type_props['commerce-cardonfile-process-card-response']['card_chosen']);
 
   // translate properties to tokens
   foreach ($type_props as $type => $props) {
