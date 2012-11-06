@@ -1204,6 +1204,7 @@ function _commerce_cardonfile_data_card_replacements($card_data, $prefix = '@') 
     'card_exp_month',
     'card_exp_year',
     'status',
+    'instance_id',
     'instance_default',
   );
 

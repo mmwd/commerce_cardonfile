@@ -14,6 +14,7 @@ function commerce_cardonfile_rules_data_info() {
       'label' => t('card data'),
       'group' => t('Card on File Data'),
       'wrap' => TRUE,
+      'wrapper class' => 'EntityStructureWrapper',
       'token type' => 'commerce-cardonfile-card-data',
       'property info' => commerce_cardonfile_data_property_info_callback(),
     ),
@@ -21,6 +22,8 @@ function commerce_cardonfile_rules_data_info() {
       'label' => t('process card response'),
       'group' => t('Process Card on File Response'),
       'wrap' => TRUE,
+      'wrapper class' => 'EntityStructureWrapper',
+      'token type' => 'commerce-cardonfile-process-card-response',
       'property info' => commerce_cardonfile_order_process_card_response_property_info_callback(),
     ),
   );
