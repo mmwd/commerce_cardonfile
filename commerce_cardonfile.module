@@ -2048,12 +2048,13 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
   if (!empty($card_data)) {
     // A specific card is provided ...
     $response['card_chosen'] = $card_data;
+    $response['message_variables'] += _commerce_cardonfile_data_card_replacements($card_data, '@');
 
     if (!commerce_cardonfile_order_can_charge_card($order, $card_data)) {
       // check for expiration to set a specific code
       if (!commerce_cardonfile_data_check_expiration($card_data)) {
         $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED;
-        $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process @order_id.';
+        $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process order @order_id.';
       }
       else {
         $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_NOT_CHARGEABLE;
@@ -2085,24 +2086,28 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
         // check first unchargeable card for expiration
         $unchargeable_card_top = reset($unchargeable_cards);
         $response['card_chosen'] = $unchargeable_card_top;
+        $response['message_variables'] += _commerce_cardonfile_data_card_replacements($unchargeable_card_top, '@');
         if (!commerce_cardonfile_data_check_expiration($unchargeable_card_top)) {
           $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED;
-          $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process @order_id.';
+          $response['message'] = 'Card on file has expired for user @uid\'s card @card_id when attempting to process order @order_id.';
         }
       }
 
       return $response;
     }
 
+    // chargeable card found
     $response['card_chosen'] = $card_data;
+    $response['message_variables'] += _commerce_cardonfile_data_card_replacements($card_data, '@');
+  }
+
+  if (empty($card_data)) {
+    return $response;
   }
 
   if (empty($response['card_chosen'])) {
     $response['card_chosen'] = $card_data;
   }
-
-  // update tokens with card data
-  $response['message_variables'] += _commerce_cardonfile_data_card_replacements($card_data, '@');
 
   // load payment method
   $payment_method = commerce_payment_method_instance_load($card_data['instance_id']);
