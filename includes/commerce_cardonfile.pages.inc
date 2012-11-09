@@ -27,6 +27,9 @@ function commerce_cardonfile_create_page($card_data, $owner) {
  *   The data array representing a card on file.
  */
 function commerce_cardonfile_create_form($form, &$form_state, $card_data, $owner) {
+  // Disable cache
+  $form_state['no_cache'] = TRUE;
+
   $form['card_data'] = array(
     '#type' => 'value',
     '#value' => $card_data,
@@ -150,6 +153,9 @@ function commerce_cardonfile_update_page($card_data, $owner) {
  */
 function commerce_cardonfile_update_form($form, &$form_state, $card_data = array(), $owner = NULL) {
   global $user;
+
+  // Disable cache
+  $form_state['no_cache'] = TRUE;
 
   // store card data
   $card_data = !empty($card_data) ? $card_data : array();
@@ -348,6 +354,9 @@ function _commerce_cardonfile_attach_billing_address_edit_form(&$form, &$form_st
  *   The data array representing a card on file.
  */
 function commerce_cardonfile_delete_form($form, &$form_state, $card_data) {
+  // Disable cache
+  $form_state['no_cache'] = TRUE;
+
   $form['card_data'] = array(
     '#type' => 'value',
     '#value' => $card_data,
