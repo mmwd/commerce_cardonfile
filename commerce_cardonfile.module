@@ -1994,11 +1994,13 @@ function commerce_cardonfile_order_process_card($order, $charge = array(), $card
  * @param $card_data
  *   The card data array. If not provided, then the chargeable card for the
  *   order will be determined.
+ * @param $forced_instance_id
+ *   The payment method instance id to force for order processing
  *
  * @return
  *   TRUE if the order was processed successfully
  */
-function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(), $card_data = array()) {
+function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(), $card_data = array(), $forced_instance_id = NULL) {
   $response = array(
     'status' => FALSE,
     'code' => COMMERCE_COF_PROCESS_CODE_INSUFFICIENT_DATA,
@@ -2025,9 +2027,6 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
     '@uid' => $order->uid,
   );
 
-  // Wrap up the order
-  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
-
   // determine charge amount
   // set charge to order balance if none provided
   if (empty($charge)) {
@@ -2043,6 +2042,24 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
   $response['message_variables'] += array(
     '@charge' => commerce_currency_format($charge['amount'], $charge['currency_code']),
   );
+
+  // resolve payment method instance input
+  $instance_is_forced = FALSE;
+  if (!empty($forced_instance_id)) {
+    $instance_is_forced = TRUE;
+
+    // set the order data so chargeable hook can use to determine the card
+    $order->data['payment_method'] = $forced_instance_id;
+    $response['message_variables'] += array(
+      '@instance_id' => $forced_instance_id,
+    );
+  }
+  else {
+    $forced_instance_id = NULL;
+  }
+
+  // Wrap up the order
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
 
   // Determine order's chargeable card
   if (!empty($card_data)) {
@@ -2069,7 +2086,8 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
     $card_data = array();
     $unchargeable_cards = array();
     foreach ($possible_cards as $card_id => $possible_card) {
-      if (commerce_cardonfile_order_can_charge_card($order, $possible_card)) {
+      if (commerce_cardonfile_order_can_charge_card($order, $possible_card) &&
+          (!$instance_is_forced || !isset($possible_card['instance_id']) || $possible_card['instance_id'] == $forced_instance_id)) {
         $card_data = $possible_card;
         break;
       }
@@ -2107,6 +2125,13 @@ function _commerce_cardonfile_order_invoke_process_card($order, $charge = array(
 
   if (empty($response['card_chosen'])) {
     $response['card_chosen'] = $card_data;
+  }
+
+  if ($instance_is_forced && isset($card_data['instance_id']) && $card_data['instance_id'] != $forced_instance_id) {
+    $response['code'] = COMMERCE_COF_PROCESS_CODE_CARD_NOT_CHARGEABLE;
+    $response['message'] = 'Card provided is not registered with the requested payment method: Order @order_id, user @uid, payment instance @instance_id';
+
+    return $response;
   }
 
   // load payment method
