@@ -794,6 +794,11 @@ function _commerce_cardonfile_payment_method_instances($method_id, $include_disa
 
     // find all rules with an action to enable this method
     foreach ($rules_configs as $rule_name => $rule) {
+      // Only rules and sub-types have actions.
+      if (!($rule instanceof Rule)) {
+        continue;
+      }
+
       // fast skip if rule does not depend on commerce_payment
       if (!isset($rule->dependencies) || !in_array('commerce_payment', $rule->dependencies)) {
         continue;
