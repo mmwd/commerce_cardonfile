@@ -1,0 +1,7 @@
+name = Card on File Payment Method Example
+description = Provides an example payment method for testing and development of Commerce Card on File functionality.
+package = Commerce (contrib)
+dependencies[] = commerce
+dependencies[] = commerce_payment
+dependencies[] = commerce_cardonfile
+core = 7.x
