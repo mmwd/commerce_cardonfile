@@ -1062,13 +1062,28 @@ function commerce_cardonfile_user_access($account) {
     return FALSE;
   }
 
-  // DENY if the user DOES NOT have create access AND NO cards on file
-  if (!commerce_cardonfile_data_access('create', $card_data_stub, $account)) {
-    // DENY if the user DOES NOT have any cards
-    $stored_cards = commerce_cardonfile_data_load_multiple($account->uid);
-    if (empty($stored_cards)) {
-      return FALSE;
+  // load active cards
+  $stored_cards = commerce_cardonfile_data_load_multiple($account->uid, NULL, TRUE);
+
+  // if no cards, then check create access
+  if (empty($stored_cards)) {
+    $create_implements = commerce_cardonfile_payment_method_implements('create callback');
+    foreach ($create_implements as $method_id => $method_function) {
+      $payment_method_instances = _commerce_cardonfile_payment_method_instances($method_id, FALSE);
+      if (empty($payment_method_instances)) {
+        continue;
+      }
+
+      foreach ($payment_method_instances as $instance_id => $payment_method) {
+        $card_data_stub['instance_id'] = $instance_id;
+        if (commerce_cardonfile_data_access('create', $card_data_stub, $account)) {
+          return TRUE;
+        }
+      }
     }
+
+    // DENY if the user DOES NOT have create access AND NO cards on file
+    return FALSE;
   }
 
   // ALLOW by default
