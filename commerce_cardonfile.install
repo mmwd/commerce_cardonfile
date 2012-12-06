@@ -179,3 +179,43 @@ function commerce_cardonfile_update_7102(&$sandbox) {
 
   return t('Card on file order fields have been created.');
 }
+
+/**
+ * Update permission from 'manage' to 'view', 'edit', 'delete'
+ */
+function commerce_cardonfile_update_7103(&$sandbox) {
+  // Load utility functions.
+  module_load_install('commerce');
+
+  // Retrieve existing permissions
+  $result= db_select('role_permission', 'p')
+    ->fields('p')
+    ->condition('permission', 'manage own card data')
+    ->execute();
+
+  $records = $result->fetchAll(PDO::FETCH_ASSOC);
+  if (empty($records)) {
+    return t('No permissions to update.');
+  }
+
+  // update permission and views access from 'manaage' to 'view'
+  $map = array(
+    'manage own card data' => 'view own card data',
+  );
+  commerce_update_rename_permissions($map);
+
+  // create 'edit' and 'delete' for 'manage' permissions to mimic old access
+  $inserts = array();
+  foreach ($records as $record) {
+    $inserts[] = array('permission' => 'edit own card data') + $record;
+    $inserts[] = array('permission' => 'delete own card data') + $record;
+  }
+
+  $query = db_insert('role_permission')->fields(array('rid', 'permission', 'module'));
+  foreach ($inserts as $insert) {
+    $query->values($insert);
+  }
+  $query->execute();
+
+  return t('Role and custom View permissions updated to new permissions. Access checks in modules and permissions on default Views must be updated manually.');
+}
